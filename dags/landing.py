@@ -14,49 +14,59 @@ from airflow.utils.decorators import apply_defaults
 
 import pandas as pd
 
-def tables_to_csv_files(hook):
-    tables_name=hook.get_records(sql="""	SELECT CONCAT(TABLE_SCHEMA, '.', TABLE_NAME)
-                                        FROM INFORMATION_SCHEMA.TABLES
-                                        WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_CATALOG='BicycleRetailer' and TABLE_SCHEMA!='dbo'""")
-    for table_name in tables_name:
-        table_name=table_name[0]
-        print('Table to csv for '+table_name)
-        sql="SELECT * from {0}".format(table_name)
-        df = hook.get_pandas_df(sql=sql)
-        df.to_csv('/opt/airflow/landing_cycle-sale/{0}.csv'.format(table_name), index=False)
-
-def able_to_run_task(task_name):
-    hook_config_table = MsSqlHook(mssql_conn_id='staging_db')
-    tuple=hook_config_table.get_records(sql="""
-                                        declare @able_to_run bit
-                                        EXEC able_to_run '{}', @able_to_run output
-                                        select @able_to_run
-                                        """.format(task_name))
-    return tuple[0][0]
+def load_enable_task_config(task_name):
+    """
+        return config parameter of every enable child task of a task from task_name
+    """
+    hook = MsSqlHook(mssql_conn_id='staging_db')
+    config_df = hook.get_pandas_df(sql="EXEC load_enable_task_config {0}".format(task_name))
+    return config_df.to_dict("records")
 
 
-def landing_bicycle_retailer_db():
-    # con=BaseHook.get_connection("source_bicycle_retailer_db").get_uri()
-    # con+='?driver=ODBC+Driver+17+for+SQL+Server'
-    # df =  pd.read_sql('SELECT * from [Production].[Product]', con)
-    # print(df.head())
-    can_run=able_to_run_task('landing_bicycle_retailer_db')
-    if can_run == False :
-        print("REFUSE TO RUN FROM CONFIG TABLE")
-    else:
-        hook = MsSqlHook(mssql_conn_id='source_bicycle_retailer_db')
-        # hook = MsSqlHook(mssql_conn_id='AAA')
-        tables_to_csv_files(hook)
+class CopyDatabaseToCsv(BaseOperator):
+    """
+    load data from table in database to csv file
+    """
+
+    def __init__(self, source_conn_id, *args, **kwargs):
+        super().__init__(*args, **kwargs) # initialize the parent operator
+        self.source_conn_id = source_conn_id
+
+    # execute() method that runs when a task uses this operator, make sure to include the 'context' kwarg.
+    def execute(self, context):
+        # write to Airflow task logs
+        tasks_config=load_enable_task_config(self.task_id)
+        if len(tasks_config)!=0:
+            hook = MsSqlHook(mssql_conn_id=self.source_conn_id)
+            for task_config in tasks_config:
+                table_name=task_config['source_schema']+'.'+task_config['source_table']
+                csv_dir="{0}{1}.{2}".format(task_config['target_location'], task_config['target_table'], task_config['target_schema'])
+
+                self.log.info('COPY TABLE -> FILE ({0}, {1})'.format(table_name, csv_dir))
+
+                df = hook.get_pandas_df(sql="SELECT * from {0}".format(table_name))
+                df.to_csv(csv_dir, index=False)
+        # the return value of '.execute()' will be pushed to XCom by default
 
 
-def landing_hrdb_db():
-    can_run=able_to_run_task('landing_hrdb_db')
-    if can_run == False :
-        print("REFUSE TO RUN FROM CONFIG TABLE")
-    else:
-        hook = MsSqlHook(mssql_conn_id='source_hrdb_db')
-        tables_to_csv_files(hook)
+class CopyFile(BashOperator):
+    # template_fields = ('bash_command', 'source_file', 'source_dir', 'target_file', 'target_dir')
 
+    @apply_defaults #Looks for an argument named "default_args", and fills the unspecified arguments from it.
+    def __init__(
+            self,
+            *args, **kwargs):
+
+        tasks_config=load_enable_task_config(kwargs['task_id'])
+        bash_str=""
+        for task_config in tasks_config:
+            source_dir=task_config['source_location']
+            target_dir="{0}{1}.{2}".format(task_config['target_location'], task_config['target_table'], task_config['target_schema'])
+
+            self.log.info('COPY FILE -> FILE ({0}, {1})'.format(source_dir, target_dir)) #not run
+            bash_str+="cp {0} {1};".format(source_dir, target_dir)
+            
+        super(CopyFile, self).__init__(bash_command=bash_str, *args, **kwargs)
 
 default_args = {
     'owner': 'hieu_nguyen',
@@ -78,42 +88,26 @@ with DAG(
         bash_command="echo START",
     )
 
-    landing_csv = BashOperator(
+    landing_csv = CopyFile(
         task_id='landing_csv',
-        bash_command="cp /opt/airflow/source/Csv/*.csv /opt/airflow/landing_cycle-sale"
     )
 
-    
-    landing_excel = BashOperator(
+    landing_excel = CopyFile(
         task_id='landing_excel',
-        bash_command="cp /opt/airflow/source/Excel/*.xlsx /opt/airflow/landing_cycle-sale"
     )
 
-    landing_json = BashOperator(
+    landing_json = CopyFile(
         task_id='landing_json',
-        bash_command="cp /opt/airflow/source/Json/*.json /opt/airflow/landing_cycle-sale"
     )
 
-    # landing_bicycle_retailer_db = MsSqlOperator(
-    #     task_id='landing_bicycle_retailer_db',
-    #     mssql_conn_id="source_bicycle_retailer_db",
-    #     sql=r"""select top 5 * from [Sales].[CreditCard]""",
-    # )
-
-    # @dag.task(task_id="copy data")
-    # def copy_mssql_hook():
-    #     mssql_hook = MsSqlHook(mssql_conn_id="source_bicycle_retailer_db")
-    #     df =  pd.read_sql('SELECT *', Connnection.get("my_connection_id").get_uri()) 
-
-    landing_bicycle_retailer_db = PythonOperator(
+    landing_bicycle_retailer_db = CopyDatabaseToCsv(
         task_id='landing_bicycle_retailer_db',
-        python_callable=landing_bicycle_retailer_db,
-
+        source_conn_id='source_bicycle_retailer_db'
     )
 
-    landing_hrdb_db = PythonOperator(
+    landing_hrdb_db = CopyDatabaseToCsv(
         task_id='landing_hrdb_db',
-        python_callable=landing_hrdb_db,
+        source_conn_id='source_hrdb_db',
     )
 
     end = BashOperator(
