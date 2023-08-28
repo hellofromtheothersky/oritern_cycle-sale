@@ -20,34 +20,68 @@ from airflow.utils.task_group import TaskGroup
 
 from airflow.decorators import dag, task
 
+from airflow.utils.trigger_rule import TriggerRule
+
+from airflow.exceptions import AirflowException
+
 import pandas as pd
+import json
 
 @task
-def load_enable_task_config(task_name):
+def load_enable_task_config(task_name, ti=None):
     """
         return config parameter of every enable child task of a task from task_name
     """
     hook = MsSqlHook(mssql_conn_id='staging_db')
     config_df = hook.get_pandas_df(sql="EXEC load_enable_task_config {0}".format(task_name))
-    return config_df.to_dict("records")
+    config_df_dict=config_df.to_dict("records")
+    
+    mapped_index={}
+
+    for i in range(len(config_df_dict)):
+        if task_name not in mapped_index.keys():
+            mapped_index[task_name]={}
+        mapped_index[task_name][int(i)]=config_df_dict[i]['task_id']
+
+    ti.xcom_push(key="mapped_index", value=mapped_index)
+
+    return config_df_dict
 
 
+def update_task_runtime(ti):
+    mapped_index={}
+    i=0
+    while i>=0:
+        sub="__"+str(i)
+        if i==0:
+            sub=""
+        a=ti.xcom_pull(task_ids="landing.load_enable_task_config"+sub, key="mapped_index")
+        if a:
+            mapped_index.update(a)
+            i+=1
+        else: i=-1
 
-def update_task_runtime():
-    pass
-    # dag = DagBag().get_dag('landing')
-    # last_dagrun_run_id = dag.get_last_dagrun(include_externally_triggered=True)
+    hook = MsSqlHook(mssql_conn_id='staging_db')
+    dag = DagBag().get_dag('landing')
+    last_dagrun_run_id = dag.get_last_dagrun(include_externally_triggered=True)
 
-    # dag_runs = DagRun.find(dag_id='landing')
-    # for dag_run in dag_runs:
-    # # get the dag_run details for the Dag that triggered this
-    #     if dag_run.execution_date == last_dagrun_run_id.execution_date:
-    #         # get the DAG-level dag_run metadata!
-    #         dag_run_tasks = dag_run.get_task_instances()
-    #         for task in dag_run_tasks:
-    #             # get the TASK-level dag_run metadata!
-    #             hook = MsSqlHook(mssql_conn_id='staging_db')
-    #             hook.run("EXEC set_task_config")
+    dag_runs = DagRun.find(dag_id='landing')
+    for dag_run in dag_runs:
+    # get the dag_run details for the Dag that triggered this
+        if dag_run.execution_date == last_dagrun_run_id.execution_date:
+            # get the DAG-level dag_run metadata!
+            dag_run_tasks = dag_run.get_task_instances()
+            for task in dag_run_tasks:
+                # print(task.task_id, task.map_index, task.start_date, task.end_date, task.duration, task.state)
+                try:
+                    task_id=task.task_id.split('.')[1]
+                except IndexError:
+                    pass
+                else:
+                    if task_id in mapped_index.keys():
+                        task_id_in_cf_table=mapped_index[task_id][str(task.map_index)]
+                        # get the TASK-level dag_run metadata!
+                        hook.run("EXEC set_task_config {0}, '{1}', '{2}', {3}, '{4}'".format(task_id_in_cf_table, task.start_date, task.end_date, task.duration, task.state))
 
 
 class CopyTableToCsv(BaseOperator):
@@ -71,7 +105,6 @@ class CopyTableToCsv(BaseOperator):
 
         df = hook.get_pandas_df(sql="SELECT * from {0}".format(table_name))
         df.to_csv(csv_dir, index=False)
-        # the return value of '.execute()' will be pushed to XCom by default
 
 
 class CopyFile(BashOperator):
@@ -108,6 +141,9 @@ default_args = {
 # def minus(x: int, y: int):
 #     return x + y
 
+# @task(trigger_rule=TriggerRule.ALL_FAILED, retries=0)
+# def watcher():
+#     raise AirflowException("Failing task because one or more upstream tasks failed.")
 
 with DAG( 
     default_args=default_args,
@@ -120,17 +156,18 @@ with DAG(
     start = BashOperator(
         task_id='start',
         bash_command="echo START",
+        do_xcom_push=False,
     )
 
     with TaskGroup(group_id='landing') as landing:
         landing_bicycle_retailer_db = CopyTableToCsv.partial(
             task_id='landing_bicycle_retailer_db',
-            source_conn_id='source_bicycle_retailer_db'
+            source_conn_id='source_bicycle_retailer_db',
         ).expand(task_config=load_enable_task_config('landing_bicycle_retailer_db'))
 
         landing_hrdb_db = CopyTableToCsv.partial(
             task_id='landing_hrdb_db',
-            source_conn_id='source_hrdb_db'
+            source_conn_id='source_hrdb_db',
         ).expand(task_config=load_enable_task_config('landing_hrdb_db'))
 
         landing_csv = CopyFile.partial(
@@ -145,14 +182,16 @@ with DAG(
             task_id='landing_json',
         ).expand(task_config=load_enable_task_config('landing_json'))
 
-    # update_task_runtime = PythonOperator(
-    #     task_id='update_task_runtime',
-    #     python_callable=update_task_runtime
-    # )
+    update_task_runtime = PythonOperator(
+        task_id='update_task_runtime',
+        python_callable=update_task_runtime,
+        trigger_rule=TriggerRule.ALL_DONE,
+    )
 
     end = BashOperator(
         task_id='end',
         bash_command="echo END",
+        do_xcom_push=False,
     )
 
     # added_values = PythonOperator.partial(
@@ -164,4 +203,4 @@ with DAG(
 
     # start>>[landing_csv, landing_json, landing_bicycle_retailer_db, landing_hrdb_db]>>end
     # start >> update_task_runtime >> landing_excel >> end
-    start>>landing>>end
+    start>>landing>>update_task_runtime>>end

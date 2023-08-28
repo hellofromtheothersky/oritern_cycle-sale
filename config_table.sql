@@ -12,8 +12,9 @@ CREATE TABLE config_table (
 	target_schema VARCHAR(100),
 	target_table VARCHAR(100),
     enable BIT,
-    start_time DATETIME,
-    end_time DATETIME,
+    start_time datetimeoffset,
+    end_time datetimeoffset,
+	duration DECIMAL(18, 3),
 	status VARCHAR(50),
     fail_reason VARCHAR(255)
 );
@@ -180,27 +181,43 @@ CREATE OR ALTER PROCEDURE load_enable_task_config
 )
 AS
 BEGIN
-	select source_location, source_database, source_schema, source_table, target_location, target_database, target_schema, target_table
+	select task_id, source_location, source_database, source_schema, source_table, target_location, target_database, target_schema, target_table
 	from config_table
 	where task_name=@task_name and enable=1
 END
 go
 
 
-
+CREATE OR ALTER PROCEDURE set_task_config
+(
+    @task_id VARCHAR(100),
+	@start_time datetimeoffset,
+	@end_time datetimeoffset,
+	@duration decimal(18, 3),
+	@status varchar(50)
+)
+AS
+BEGIN
+	update config_table 
+	set start_time=@start_time, end_time=@end_time, duration=@duration, status=@status
+	where task_id=@task_id
+END
+go
 
 --run
 EXEC create_config_for_landing_db
 EXEC create_config_for_landing_file
 EXEC load_enable_task_config 'landing_bicycle_retailer_db'
 EXEC load_enable_task_config 'landing_hrdb_db'
-
-select * from config_table
+EXEC load_enable_task_config 'landing_json'
+EXEC load_enable_task_config 'landing_excel'
+EXEC load_enable_task_config 'landing_csv'
 
 --test
+--EXEC set_task_config 1, '2023-08-24 12:34:56', '2023-08-24 12:34:56', 14, 'haha' 
+select * from config_table where enable=1
 update config_table set enable=1 where task_id=51 or task_id=52 or task_id>=57
 truncate table config_table
 
-
-
+select * from config_table
 
