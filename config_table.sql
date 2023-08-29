@@ -99,7 +99,9 @@ begin
 	INSERT INTO #temp_table(source_database, source_schema, source_table) VALUES ('HRDB', 'HumanResources', 'EmployeePayHistory')
 
 	update #temp_table
-	set target_location='/opt/airflow/landing_cycle-sale/', target_table=source_table, target_schema='csv'
+	set target_location='/opt/airflow/landing_cycle-sale/'+source_database+'/', 
+		target_table=source_table, 
+		target_schema='csv'
 
 	update #temp_table
 	set task_name='landing_bicycle_retailer_db' where source_database='BicycleRetailer'
@@ -145,12 +147,14 @@ begin
 
 
 	update #temp_table
-	set target_location='/opt/airflow/landing_cycle-sale/',
-		target_table=RIGHT(source_location, CHARINDEX('/', REVERSE(source_location)) - 1)
+	set target_table=RIGHT(source_location, CHARINDEX('/', REVERSE(source_location)) - 1)
 
 	update #temp_table
 	set target_schema=RIGHT(target_table, CHARINDEX('.', REVERSE(target_table)) - 1),
 		target_table=LEFT(target_table, CHARINDEX('.', target_table) - 1)
+
+	update #temp_table
+	set target_location='/opt/airflow/landing_cycle-sale/'+target_schema+'/'
 
 	insert into config_table (task_name, 
 							source_location, 
@@ -220,4 +224,3 @@ update config_table set enable=1 where task_id=51 or task_id=52 or task_id>=57
 truncate table config_table
 
 select * from config_table
-
