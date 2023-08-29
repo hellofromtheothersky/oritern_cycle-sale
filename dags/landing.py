@@ -26,6 +26,10 @@ from airflow.exceptions import AirflowException
 
 import pandas as pd
 import json
+import re
+from dateutil import parser
+from datetime import datetime
+import os
 
 @task
 def load_enable_task_config(task_name, ti=None):
@@ -101,10 +105,13 @@ class CopyTableToCsv(BaseOperator):
         table_name=self.task_config['source_schema']+'.'+self.task_config['source_table']
         csv_dir="{0}{1}.{2}".format(self.task_config['target_location'], self.task_config['target_table'], self.task_config['target_schema'])
 
-        self.log.info('COPY TABLE -> FILE ({0}, {1})'.format(table_name, csv_dir))
+        if not os.path.exists(self.task_config['target_location']):
+            os.makedirs(self.task_config['target_location'])
+
+        # self.log.info('COPY TABLE -> FILE ({0}, {1})'.format(table_name, csv_dir))
 
         df = hook.get_pandas_df(sql="SELECT * from {0}".format(table_name))
-        df.to_csv(csv_dir, index=False)
+        df.to_csv(csv_dir, mode='w', index=False)
 
 
 class CopyFile(BashOperator):
@@ -120,10 +127,46 @@ class CopyFile(BashOperator):
         source_dir=task_config['source_location']
         target_dir="{0}{1}.{2}".format(task_config['target_location'], task_config['target_table'], task_config['target_schema'])
 
-        self.log.info('COPY FILE -> FILE ({0}, {1})'.format(source_dir, target_dir)) #not run
-        bash_str+="cp {0} {1};".format(source_dir, target_dir)
+        # self.log.info('COPY FILE -> FILE ({0}, {1})'.format(source_dir, target_dir)) #not run
+        bash_str+="mkdir -p {0}; cp {1} {2};".format(task_config['target_location'], source_dir, target_dir)
             
         super(CopyFile, self).__init__(bash_command=bash_str, *args, **kwargs)
+
+
+class Archiving(BashOperator):
+    # template_fields = ('bash_command', 'source_file', 'source_dir', 'target_file', 'target_dir')
+
+    @apply_defaults #Looks for an argument named "default_args", and fills the unspecified arguments from it.
+    def __init__(
+            self,
+            # logical_date,
+            *args, **kwargs):
+
+        bash_str="""
+                source_folder="/opt/airflow/landing_cycle-sale/"
+                
+                for source_sub_folder in $source_folder/*/; do
+                    folder_name=$(basename $source_sub_folder)
+                    if [[ $folder_name == '*' || $folder_name == 'archive' ]]; then
+                        continue
+                    fi
+                    destination_folder=${source_folder}archive/$folder_name
+                    mkdir -p $destination_folder
+
+                    for source_file in $source_sub_folder/*; do
+                        if [[ -f $source_file ]]; then
+                            filename=$(basename $source_file)
+                            extension=${filename##*.}
+                            filename_no_ext=${filename%.*}
+                            new_filename=${filename_no_ext}_"""+"{{ format_yyyymmdd(data_interval_start) }}"+""".${extension}
+
+                            mv $source_file ${destination_folder}/${new_filename}
+                        fi
+                    done
+                done
+                """
+            
+        super(Archiving, self).__init__(bash_command=bash_str, *args, **kwargs)
 
 
 default_args = {
@@ -132,18 +175,12 @@ default_args = {
     'retry_delay': timedelta(minutes=1)
 }
 
-# def add_function(x: int):
-#     print(x)
-#     return x
-
-
-# @task
-# def minus(x: int, y: int):
-#     return x + y
-
 # @task(trigger_rule=TriggerRule.ALL_FAILED, retries=0)
 # def watcher():
 #     raise AirflowException("Failing task because one or more upstream tasks failed.")
+def format_yyyymmdd(datetime):
+    return datetime.strftime("%Y%m%d")
+
 
 with DAG( 
     default_args=default_args,
@@ -152,12 +189,21 @@ with DAG(
     start_date = datetime.now()- timedelta(days=2),
     schedule_interval='0 22 * * *',
     catchup=False,
+    user_defined_macros={
+        "format_yyyymmdd": format_yyyymmdd,  # Macro can be a variable/function
+    },
 ) as dag:
     start = BashOperator(
         task_id='start',
         bash_command="echo START",
         do_xcom_push=False,
     )
+
+    archiving = Archiving(
+        task_id='archiving',
+        # logical_date="{{ ti.xcom_pull(task_ids='start') }}"
+    )
+
 
     with TaskGroup(group_id='landing') as landing:
         landing_bicycle_retailer_db = CopyTableToCsv.partial(
@@ -201,6 +247,4 @@ with DAG(
 
     # minused_values = minus.partial(y=10).expand(x=[1, 2, 3])
 
-    # start>>[landing_csv, landing_json, landing_bicycle_retailer_db, landing_hrdb_db]>>end
-    # start >> update_task_runtime >> landing_excel >> end
-    start>>landing>>update_task_runtime>>end
+    start>>archiving>>landing>>update_task_runtime>>end
