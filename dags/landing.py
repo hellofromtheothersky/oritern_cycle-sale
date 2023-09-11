@@ -23,6 +23,7 @@ from airflow.decorators import dag, task
 from airflow.utils.trigger_rule import TriggerRule
 
 from airflow.exceptions import AirflowException
+from jinja2 import Template
 
 import pandas as pd
 import json
@@ -30,16 +31,19 @@ import re
 from dateutil import parser
 from datetime import datetime
 import os
-
+staging_con='staging_staging_db_db'
 @task
 def load_enable_task_config(task_name, ti=None):
     """
         return config parameter of every enable child task of a task from task_name
     """
-    hook = MsSqlHook(mssql_conn_id='staging_db')
+    hook = MsSqlHook(mssql_conn_id=staging_con)
     config_df = hook.get_pandas_df(sql="EXEC load_enable_task_config {0}".format(task_name))
     config_df_dict=config_df.to_dict("records")
     
+    for i in range(len(config_df_dict)):
+        config_df_dict[i]['fetch_data_qr']=hook.get_first('EXEC get_qr_for_select_data_of_task {0}'.format(config_df_dict[i]['task_id']))[0] # indice 0 to get the first col in the row
+
     mapped_index={}
 
     for i in range(len(config_df_dict)):
@@ -65,7 +69,7 @@ def update_task_runtime(ti):
             i+=1
         else: i=-1
 
-    hook = MsSqlHook(mssql_conn_id='staging_db')
+    hook = MsSqlHook(mssql_conn_id=staging_con)
     dag = DagBag().get_dag('landing')
     last_dagrun_run_id = dag.get_last_dagrun(include_externally_triggered=True)
 
@@ -85,7 +89,7 @@ def update_task_runtime(ti):
                     if task_id in mapped_index.keys():
                         task_id_in_cf_table=mapped_index[task_id][str(task.map_index)]
                         # get the TASK-level dag_run metadata!
-                        hook.run("EXEC set_task_config {0}, '{1}', '{2}', {3}, '{4}'".format(task_id_in_cf_table, task.start_date, task.end_date, task.duration, task.state))
+                        hook.run("EXEC set_task_config {0}, '{1}', '{2}', {3}, '{4}', '{5}'".format(task_id_in_cf_table, task.start_date, task.end_date, task.duration, task.state, task.execution_date))
 
 
 class CopyTableToCsv(BaseOperator):
@@ -110,7 +114,7 @@ class CopyTableToCsv(BaseOperator):
 
         # self.log.info('COPY TABLE -> FILE ({0}, {1})'.format(table_name, csv_dir))
 
-        df = hook.get_pandas_df(sql="SELECT * from {0}".format(table_name))
+        df = hook.get_pandas_df(sql=self.task_config['fetch_data_qr'])
         df.to_csv(csv_dir, mode='w', index=False)
 
 
@@ -206,26 +210,37 @@ with DAG(
 
 
     with TaskGroup(group_id='landing') as landing:
+        landing_test_db_db = CopyTableToCsv.partial(
+            task_id='landing_test_db_db',
+            source_conn_id='source_test_db_db',
+            max_active_tis_per_dagrun=2,
+        ).expand(task_config=load_enable_task_config('landing_test_db_db'))
+
         landing_bicycle_retailer_db = CopyTableToCsv.partial(
             task_id='landing_bicycle_retailer_db',
             source_conn_id='source_bicycle_retailer_db',
+            max_active_tis_per_dagrun=2,
         ).expand(task_config=load_enable_task_config('landing_bicycle_retailer_db'))
 
         landing_hrdb_db = CopyTableToCsv.partial(
             task_id='landing_hrdb_db',
             source_conn_id='source_hrdb_db',
+            max_active_tis_per_dagrun=2,
         ).expand(task_config=load_enable_task_config('landing_hrdb_db'))
 
         landing_csv = CopyFile.partial(
             task_id='landing_csv',
+            max_active_tis_per_dagrun=2,
         ).expand(task_config=load_enable_task_config('landing_csv'))
 
         landing_excel = CopyFile.partial(
             task_id='landing_excel',
+            max_active_tis_per_dagrun=2,
         ).expand(task_config=load_enable_task_config('landing_excel'))
 
         landing_json = CopyFile.partial(
             task_id='landing_json',
+            max_active_tis_per_dagrun=2,
         ).expand(task_config=load_enable_task_config('landing_json'))
 
     update_task_runtime = PythonOperator(
