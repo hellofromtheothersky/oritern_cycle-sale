@@ -13,8 +13,8 @@ default_args = {
 
 with DAG( 
     default_args=default_args,
-    dag_id='airflow_test',
-    description='just test prepare for etl project',
+    dag_id='main_dag_oritern_etl',
+    description='control etl job including landing, staging ...',
     start_date = datetime.now()- timedelta(days=2),
     schedule_interval='* * * * *',
     catchup=False,

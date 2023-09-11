@@ -3,14 +3,9 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
-from airflow.providers.microsoft.mssql.operators.mssql import MsSqlOperator
 from airflow.providers.microsoft.mssql.hooks.mssql import MsSqlHook
-from airflow.hooks.base_hook import BaseHook
-
-from airflow.models.connection import Connection
 
 from airflow.models import BaseOperator
-from airflow.utils.decorators import apply_defaults
 
 from airflow.models.dagrun import DagRun
 from airflow.models.dagbag import DagBag
@@ -18,17 +13,11 @@ from airflow.models.dagbag import DagBag
 from airflow.utils.task_group import TaskGroup
 
 
-from airflow.decorators import dag, task
+from airflow.decorators import task
 
 from airflow.utils.trigger_rule import TriggerRule
 
-from airflow.exceptions import AirflowException
-from jinja2 import Template
 
-import pandas as pd
-import json
-import re
-from dateutil import parser
 from datetime import datetime
 staging_con='staging_staging_db_db'
 
