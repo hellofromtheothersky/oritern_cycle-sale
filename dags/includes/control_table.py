@@ -1,0 +1,67 @@
+from airflow.providers.microsoft.mssql.hooks.mssql import MsSqlHook
+from airflow.models.dagrun import DagRun
+from airflow.models.dagbag import DagBag
+from airflow.decorators import  task
+
+STAGING_CON='staging_staging_db_db'
+
+def update_task_runtime(dag_id, load_cf_task_id, ti):
+    mapped_index={}
+    i=0
+    while i>=0:
+        sub="__"+str(i)
+        if i==0:
+            sub=""
+        a=ti.xcom_pull(task_ids=dag_id+'.'+load_cf_task_id+sub, key="mapped_index")
+        if a:
+            mapped_index.update(a)
+            i+=1
+        else: i=-1
+
+    hook = MsSqlHook(mssql_conn_id=STAGING_CON)
+    dag = DagBag().get_dag(dag_id)
+    last_dagrun_run_id = dag.get_last_dagrun(include_externally_triggered=True)
+
+    dag_runs = DagRun.find(dag_id=dag_id)
+    for dag_run in dag_runs:
+    # get the dag_run details for the Dag that triggered this
+        if dag_run.execution_date == last_dagrun_run_id.execution_date:
+            # get the DAG-level dag_run metadata!
+            dag_run_tasks = dag_run.get_task_instances()
+            for task in dag_run_tasks:
+                try:
+                    task_id=task.task_id.split('.')[1]
+                except IndexError:
+                    pass
+                else:
+                    print(task.task_id, task.map_index, task.start_date, task.end_date, task.duration, task.state)
+                    print(mapped_index)
+                    if task_id in mapped_index.keys():
+                        print('ko co thay')
+                        task_id_in_cf_table=mapped_index[task_id][str(task.map_index)]
+                        # get the TASK-level dag_run metadata!
+                        hook.run("EXEC set_task_config {0}, '{1}', '{2}', {3}, '{4}', '{5}'".format(task_id_in_cf_table, task.start_date, task.end_date, task.duration, task.state, task.execution_date))
+
+
+@task
+def load_enable_task_config(task_name, ti=None):
+    """
+        return config parameter of every enable child task of a task from task_name
+    """
+    hook = MsSqlHook(mssql_conn_id=STAGING_CON)
+    config_df = hook.get_pandas_df(sql="EXEC load_enable_task_config {0}".format(task_name))
+    config_df_dict=config_df.to_dict("records")
+    
+    for i in range(len(config_df_dict)):
+        config_df_dict[i]['fetch_data_qr']=hook.get_first('EXEC get_qr_for_select_data_of_task {0}'.format(config_df_dict[i]['task_id']))[0] # indice 0 to get the first col in the row
+
+    mapped_index={}
+
+    for i in range(len(config_df_dict)):
+        if task_name not in mapped_index.keys():
+            mapped_index[task_name]={}
+        mapped_index[task_name][int(i)]=config_df_dict[i]['task_id']
+
+    ti.xcom_push(key="mapped_index", value=mapped_index)
+
+    return config_df_dict

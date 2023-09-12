@@ -1,87 +1,22 @@
-from datetime import datetime, timedelta
-
 from airflow import DAG
+
 from airflow.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
-from operators.CustomCopy import CopyTableToCsv, CopyFile
+from airflow.models import BaseOperator
 
 from airflow.providers.microsoft.mssql.hooks.mssql import MsSqlHook
 
-
 from airflow.utils.decorators import apply_defaults
-
-from airflow.models.dagrun import DagRun
-from airflow.models.dagbag import DagBag
+from airflow.decorators import  task
 
 from airflow.utils.task_group import TaskGroup
 
-
-from airflow.decorators import  task
-
 from airflow.utils.trigger_rule import TriggerRule
 
-from datetime import datetime
+from includes.control_table import update_task_runtime, load_enable_task_config
 
-staging_con='staging_staging_db_db'
-@task
-def load_enable_task_config(task_name, ti=None):
-    """
-        return config parameter of every enable child task of a task from task_name
-    """
-    hook = MsSqlHook(mssql_conn_id=staging_con)
-    config_df = hook.get_pandas_df(sql="EXEC load_enable_task_config {0}".format(task_name))
-    config_df_dict=config_df.to_dict("records")
-    
-    for i in range(len(config_df_dict)):
-        config_df_dict[i]['fetch_data_qr']=hook.get_first('EXEC get_qr_for_select_data_of_task {0}'.format(config_df_dict[i]['task_id']))[0] # indice 0 to get the first col in the row
-
-    mapped_index={}
-
-    for i in range(len(config_df_dict)):
-        if task_name not in mapped_index.keys():
-            mapped_index[task_name]={}
-        mapped_index[task_name][int(i)]=config_df_dict[i]['task_id']
-
-    ti.xcom_push(key="mapped_index", value=mapped_index)
-
-    return config_df_dict
-
-
-def update_task_runtime(ti):
-    mapped_index={}
-    i=0
-    while i>=0:
-        sub="__"+str(i)
-        if i==0:
-            sub=""
-        a=ti.xcom_pull(task_ids="landing.load_enable_task_config"+sub, key="mapped_index")
-        if a:
-            mapped_index.update(a)
-            i+=1
-        else: i=-1
-
-    hook = MsSqlHook(mssql_conn_id=staging_con)
-    dag = DagBag().get_dag('landing')
-    last_dagrun_run_id = dag.get_last_dagrun(include_externally_triggered=True)
-
-    dag_runs = DagRun.find(dag_id='landing')
-    for dag_run in dag_runs:
-    # get the dag_run details for the Dag that triggered this
-        if dag_run.execution_date == last_dagrun_run_id.execution_date:
-            # get the DAG-level dag_run metadata!
-            dag_run_tasks = dag_run.get_task_instances()
-            for task in dag_run_tasks:
-                # print(task.task_id, task.map_index, task.start_date, task.end_date, task.duration, task.state)
-                try:
-                    task_id=task.task_id.split('.')[1]
-                except IndexError:
-                    pass
-                else:
-                    if task_id in mapped_index.keys():
-                        task_id_in_cf_table=mapped_index[task_id][str(task.map_index)]
-                        # get the TASK-level dag_run metadata!
-                        hook.run("EXEC set_task_config {0}, '{1}', '{2}', {3}, '{4}', '{5}'".format(task_id_in_cf_table, task.start_date, task.end_date, task.duration, task.state, task.execution_date))
-
+from datetime import datetime, timedelta
+import os
 
 class Archiving(BashOperator):
     # template_fields = ('bash_command', 'source_file', 'source_dir', 'target_file', 'target_dir')
@@ -89,9 +24,7 @@ class Archiving(BashOperator):
     @apply_defaults #Looks for an argument named "default_args", and fills the unspecified arguments from it.
     def __init__(
             self,
-            # logical_date,
             *args, **kwargs):
-
         bash_str="""
                 source_folder="/opt/airflow/landing_cycle-sale/"
                 
@@ -119,15 +52,55 @@ class Archiving(BashOperator):
         super(Archiving, self).__init__(bash_command=bash_str, *args, **kwargs)
 
 
+class CopyTableToCsv(BaseOperator):
+    """
+    load data from table in database to csv file
+    """
+
+    def __init__(self, source_conn_id, task_config, *args, **kwargs):
+        super().__init__(*args, **kwargs) # initialize the parent operator
+        self.source_conn_id = source_conn_id
+        self.task_config = task_config
+
+    # execute() method that runs when a task uses this operator, make sure to include the 'context' kwarg.
+    def execute(self, context):
+        # write to Airflow task logs
+        hook = MsSqlHook(mssql_conn_id=self.source_conn_id)
+        csv_dir="{0}{1}.{2}".format(self.task_config['target_location'], self.task_config['target_table'], self.task_config['target_schema'])
+
+        if not os.path.exists(self.task_config['target_location']):
+            os.makedirs(self.task_config['target_location'])
+
+        # self.log.info('COPY TABLE -> FILE ({0}, {1})'.format(table_name, csv_dir))
+
+        df = hook.get_pandas_df(sql=self.task_config['fetch_data_qr'])
+        df.to_csv(csv_dir, mode='w', index=False)
+
+
+class CopyFile(BashOperator):
+    # template_fields = ('bash_command', 'source_file', 'source_dir', 'target_file', 'target_dir')
+
+    @apply_defaults #Looks for an argument named "default_args", and fills the unspecified arguments from it.
+    def __init__(
+            self,
+            task_config,
+            *args, **kwargs):
+
+        bash_str=""
+        source_dir=task_config['source_location']
+        target_dir="{0}{1}.{2}".format(task_config['target_location'], task_config['target_table'], task_config['target_schema'])
+
+        # self.log.info('COPY FILE -> FILE ({0}, {1})'.format(source_dir, target_dir)) #not run
+        bash_str+="mkdir -p {0}; cp {1} {2};".format(task_config['target_location'], source_dir, target_dir)
+            
+        super(CopyFile, self).__init__(bash_command=bash_str, *args, **kwargs)
+
+
 default_args = {
     'owner': 'hieu_nguyen',
     'retries': 5,
     'retry_delay': timedelta(minutes=1)
 }
-
-# @task(trigger_rule=TriggerRule.ALL_FAILED, retries=0)
-# def watcher():
-#     raise AirflowException("Failing task because one or more upstream tasks failed.")
 def format_yyyymmdd(datetime):
     return datetime.strftime("%Y%m%d")
 
@@ -151,9 +124,7 @@ with DAG(
 
     archiving = Archiving(
         task_id='archiving',
-        # logical_date="{{ ti.xcom_pull(task_ids='start') }}"
     )
-
 
     with TaskGroup(group_id='landing') as landing:
         landing_test_db_db = CopyTableToCsv.partial(
@@ -192,6 +163,7 @@ with DAG(
     update_task_runtime = PythonOperator(
         task_id='update_task_runtime',
         python_callable=update_task_runtime,
+        op_kwargs={'dag_id': 'landing', 'load_cf_task_id': 'load_enable_task_config'},
         trigger_rule=TriggerRule.ALL_DONE,
     )
 
@@ -200,12 +172,5 @@ with DAG(
         bash_command="echo END",
         do_xcom_push=False,
     )
-
-    # added_values = PythonOperator.partial(
-    #     task_id="added_values",
-    #     python_callable=add_function,
-    # ).expand(op_args=[[1], [2], [3]])
-
-    # minused_values = minus.partial(y=10).expand(x=[1, 2, 3])
 
     start>>archiving>>landing>>update_task_runtime>>end

@@ -89,6 +89,7 @@ BEGIN
 	DECLARE @sql NVARCHAR(MAX)
 	IF @is_incre = 0
 	BEGIN
+	--replace * by column list
 		set @sql=CONCAT('
 		select TOP 0 * into temp_table from ', @stage_table_name, '
 
@@ -148,7 +149,7 @@ BEGIN
 END
 GO
 
-
+load_to_stage_table 'C:\temp\cycle-sale\testdb\dbo_Production_Location.csv', dbo_Production_Location, 0
 select * from dbo_Production_Location
 select * from dbo_Sales_CreditCard
 truncate table dbo_Production_Location

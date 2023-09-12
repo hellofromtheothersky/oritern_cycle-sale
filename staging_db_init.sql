@@ -533,6 +533,8 @@ CREATE TABLE [dbo_Sales_CreditCard] (
 [CreditCardID] smallint NOT NULL,[CardType] nvarchar(50) NOT NULL,[CardNumber] bigint NOT NULL,[ExpMonth] tinyint NOT NULL,[ExpYear] smallint NOT NULL,[ModifiedDate] datetime NOT NULL,
 checksum binary(16), is_deleted bit, is_current bit
 )
+
+
 CREATE TABLE [dbo_Production_Location] (
 [LocationID] varchar(100) NULL,[Name] varchar(100) NULL,[CostRate] varchar(100) NULL,[Availability] varchar(100) NULL,[ModifiedDate] varchar(100) NULL,
 checksum binary(16), is_deleted bit, is_current bit
