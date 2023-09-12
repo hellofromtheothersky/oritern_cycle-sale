@@ -1,5 +1,20 @@
 ﻿use staging_db
 
+create or alter function get_col_in_str
+(
+	@table_name varchar(100)
+)
+RETURNS varchar(500)
+as
+begin
+	declare @col_list varchar(500)
+	select @col_list=STRING_AGG(COLUMN_NAME, ', ')
+	from INFORMATION_SCHEMA.COLUMNS
+	where TABLE_NAME=@table_name
+	return @col_list
+end
+
+
 CREATE OR ALTER PROC load_enable_task_config
 (
     @task_name VARCHAR(100)
@@ -71,7 +86,7 @@ CREATE OR ALTER PROC load_to_stage_table
 )
 AS
 BEGIN
-	DECLARE @sql NVARCHAR(MAX), @temp_table_name varchar(100)
+	DECLARE @sql NVARCHAR(MAX)
 	IF @is_incre = 0
 	BEGIN
 		set @sql=CONCAT('
@@ -87,10 +102,16 @@ BEGIN
 		(FIRSTROW = 2, 
 		FIELDTERMINATOR = '','',
 		ROWTERMINATOR = ''0x0A''
-		)
+		)')
+		EXEC(@sql)
 
-		alter table temp_table add checksum bigint
-		update temp_table set checksum=CHECKSUM(*)
+		DECLARE @col_list varchar(500)
+		set @col_list=dbo.get_col_in_str('temp_table')
+		alter table temp_table add checksum binary(16)
+
+		set @sql=CONCAT('
+		update temp_table 
+		set checksum=HASHBYTES(''MD5'', concat_ws(''~'', ', @col_list,')) 
 
 		update ', @stage_table_name, '
 		set is_deleted=1 where checksum not in (select checksum from temp_table)
@@ -128,8 +149,6 @@ END
 GO
 
 
-EXEC load_to_stage_table 'C:\temp\cycle-sale\testdb\dbo_Production_Location.csv', dbo_Production_Location, 0
-EXEC load_to_stage_table 'C:\temp\cycle-sale\testdb\dbo_Sales_CreditCard.csv', 'dbo_Sales_CreditCard', 1
 select * from dbo_Production_Location
 select * from dbo_Sales_CreditCard
 truncate table dbo_Production_Location
