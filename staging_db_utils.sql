@@ -53,11 +53,11 @@ CREATE OR ALTER PROC get_qr_for_select_data_of_task
 AS
 BEGIN
     DECLARE @table_name VARCHAR(100), @source_schema VARCHAR(100), @source_table VARCHAR(100),
-            @is_incre BIT, @incre_date_name VARCHAR(100), @last_load_run datetimeoffset,
+            @is_incre BIT, @time_col_name VARCHAR(100), @last_load_run datetimeoffset,
 			@sql NVARCHAR(255)
 
     SELECT @source_schema = source_schema, @source_table = source_table, 
-           @is_incre = is_incre, @incre_date_name = incre_date_name, @last_load_run = last_load_run 
+           @is_incre = is_incre, @time_col_name = time_col_name, @last_load_run = last_load_run 
     FROM config_table
     WHERE task_id = @task_id
 
@@ -70,7 +70,7 @@ BEGIN
 		DECLARE @datetimeValue datetime
 		SET @datetimeValue = SWITCHOFFSET(CONVERT(datetimeoffset, @last_load_run), '+00:00')
         SET @sql = CONCAT('SELECT * FROM ', @table_name, 
-                          ' WHERE ', QUOTENAME(@incre_date_name), ' > ', QUOTENAME(@datetimeValue, ''''))
+                          ' WHERE ', QUOTENAME(@time_col_name), ' > ', QUOTENAME(@datetimeValue, ''''))
     END
 
 	select @sql
@@ -157,7 +157,7 @@ truncate table dbo_Sales_CreditCard
 
 
 
-
+EXEC get_qr_for_select_data_of_task 57
 
 
 
