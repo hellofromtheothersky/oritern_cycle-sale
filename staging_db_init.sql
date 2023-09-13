@@ -20,10 +20,10 @@ CREATE TABLE config_table (
 	status VARCHAR(50),
     fail_reason VARCHAR(255),
 	is_incre bit,
-	incre_date_name varchar(100),
+	key_col_name varchar(100),
+	time_col_name varchar(100),
 	last_load_run datetimeoffset,
 );
-
 
 CREATE OR ALTER PROC create_config_for_landing_db as
 begin
@@ -91,10 +91,10 @@ begin
 
 
 	update #temp_table
-	set target_location='/opt/airflow/landing_cycle-sale/'+source_database+'/', 
+	set target_location='C:\temp\cycle-sale\'+source_database, 
 		target_table=source_schema+'_'+source_table, 
 		target_schema='csv',
-		incre_date_name='ModifiedDate'
+		time_col_name='ModifiedDate'
 
 	update #temp_table
 	set task_name='landing_bicycle_retailer_db' where source_database='BicycleRetailer'
@@ -111,7 +111,7 @@ begin
 							target_database,
 							target_schema,
 							target_table,
-							incre_date_name)
+							time_col_name)
 	select task_name, 
 			source_location, 
 			source_database, 
@@ -121,7 +121,7 @@ begin
 			target_database,
 			target_schema,
 			target_table,
-			incre_date_name
+			time_col_name
 	from #temp_table
 end
 GO
@@ -131,25 +131,25 @@ begin
 	select TOP 0 * into #temp_table from config_table;
 	
 	INSERT INTO #temp_table(task_name, source_location) VALUES 
-	('landing_csv', '/opt/airflow/source/Csv/TransactionHistory.csv'), 
-	('landing_excel', '/opt/airflow/source/Excel/CountryOfBusinessEntity.xlsx'),
-	('landing_json', '/opt/airflow/source/Json/Person-GeneralContact.json'),
-	('landing_json', '/opt/airflow/source/Json/Person-IndividualCustomer.json'),
-	('landing_json', '/opt/airflow/source/Json/Person-Non-salesEmployee.json'),
-	('landing_json', '/opt/airflow/source/Json/Person-SalesPerson.json'),
-	('landing_json', '/opt/airflow/source/Json/Person-StoreContact.json'),
-	('landing_json', '/opt/airflow/source/Json/Person-VendorContact.json')
+	('landing_csv', '\\NW-ORIENTINTERN\SharedData\CSV\TransactionHistory.csv'), 
+	('landing_excel', '\\NW-ORIENTINTERN\SharedData\Excel\CountryOfBusinessEntity.xlsx'),
+	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json\Person-GeneralContact.json'),
+	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json\Person-IndividualCustomer.json'),
+	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json\Person-Non-salesEmployee.json'),
+	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json\Person-SalesPerson.json'),
+	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json\Person-StoreContact.json'),
+	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json\Person-VendorContact.json')
 
 
 	update #temp_table
-	set target_table=RIGHT(source_location, CHARINDEX('/', REVERSE(source_location)) - 1)
+	set target_table=RIGHT(source_location, CHARINDEX('\', REVERSE(source_location)) - 1)
 
 	update #temp_table
 	set target_schema=RIGHT(target_table, CHARINDEX('.', REVERSE(target_table)) - 1),
 		target_table=LEFT(target_table, CHARINDEX('.', target_table) - 1)
 
 	update #temp_table
-	set target_location='/opt/airflow/landing_cycle-sale/'+target_schema+'/'
+	set target_location='C:\temp\cycle-sale\'+target_schema
 
 	insert into config_table (task_name, 
 							source_location, 
@@ -178,7 +178,7 @@ begin
 	select TOP 0 * into #temp_table from config_table;
 	
 	INSERT INTO #temp_table(is_incre, target_table, source_location) 
-	select is_incre, target_table, CONCAT(target_location, target_table, '.', target_schema) from config_table
+	select is_incre, target_table, CONCAT(target_location, '\', target_table, '.', target_schema) from config_table
 
 	update #temp_table
 	set task_name='staging',
@@ -223,7 +223,7 @@ EXEC create_config_for_staging_all
 select * from config_table where is_incre=1
 
 --set enable task
-update config_table set enable=1 where task_name='landing_test_db_db' or source_location LIKE '/opt/airflow/landing_cycle-sale/testdb/%'
+update config_table set enable=1 where task_name='landing_test_db_db' or source_location LIKE 'C:\temp\cycle-sale\testdb\%'
 select * from config_table where enable=1
 
 

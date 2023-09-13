@@ -2,10 +2,25 @@ from airflow.providers.microsoft.mssql.hooks.mssql import MsSqlHook
 from airflow.models.dagrun import DagRun
 from airflow.models.dagbag import DagBag
 from airflow.decorators import  task
+from airflow.models import Variable
 
 STAGING_CON='staging_staging_db_db'
+VOL_MAPPING = Variable.get("VOL_MAPPING", deserialize_json=True)
+
+def replace_from_dict(s, replace_dict):
+    try:
+        s=s.replace('\\', '/')
+        for key, val in replace_dict.items():
+            print('hi')
+            print(s)
+            print(key)
+            s=s.replace(key, val)
+    except AttributeError:
+        pass
+    return s
 
 def update_task_runtime(dag_id, load_cf_task_id, ti):
+    print(VOL_MAPPING)
     mapped_index={}
     i=0
     while i>=0:
@@ -37,7 +52,6 @@ def update_task_runtime(dag_id, load_cf_task_id, ti):
                     print(task.task_id, task.map_index, task.start_date, task.end_date, task.duration, task.state)
                     print(mapped_index)
                     if task_id in mapped_index.keys():
-                        print('ko co thay')
                         task_id_in_cf_table=mapped_index[task_id][str(task.map_index)]
                         # get the TASK-level dag_run metadata!
                         hook.run("EXEC set_task_config {0}, '{1}', '{2}', {3}, '{4}', '{5}'".format(task_id_in_cf_table, task.start_date, task.end_date, task.duration, task.state, task.execution_date))
@@ -54,6 +68,8 @@ def load_enable_task_config(task_name, ti=None):
     
     for i in range(len(config_df_dict)):
         config_df_dict[i]['fetch_data_qr']=hook.get_first('EXEC get_qr_for_select_data_of_task {0}'.format(config_df_dict[i]['task_id']))[0] # indice 0 to get the first col in the row
+        config_df_dict[i]['source_location']=replace_from_dict(config_df_dict[i]['source_location'], VOL_MAPPING)
+        config_df_dict[i]['target_location']=replace_from_dict(config_df_dict[i]['target_location'], VOL_MAPPING)
 
     mapped_index={}
 
