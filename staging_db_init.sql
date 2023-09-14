@@ -540,6 +540,15 @@ CREATE TABLE [dbo_Production_Location] (
 checksum binary(16), is_deleted bit, is_current bit
 )
 
+
+create or alter proc set_key_col_name_for_staging
+as
+	update config_table
+	set key_col_name=left(dbo.get_col_in_str(target_table), charindex(',', dbo.get_col_in_str(target_table))-1)
+	where task_name='staging'
+
+EXEC set_key_col_name_for_staging
+select * from config_table
 ---code to get create table code:
 --DECLARE @table_schema nvarchar(200)
 --DECLARE @table_name nvarchar(200)
