@@ -155,25 +155,6 @@ BEGIN
 END
 GO
 
-EXEC load_to_stage_table 68
-select * from config_table where task_id=68
-
-select * from [dbo].[Sales_SalesPerson]
-select * from dbo_Sales_CreditCard
-truncate table dbo_Production_Location
-truncate table dbo_Sales_CreditCard
-
-
-
-EXEC get_qr_for_select_data_of_task 57
-
-
-begin tran
-select TOP 0 * into temp_table from dbo_Sales_CreditCard
-rollback
-select * from temp_table
-
-
 
 
 

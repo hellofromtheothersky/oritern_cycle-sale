@@ -62,6 +62,17 @@ class CopyTableToCsv(BaseOperator):
         self.source_conn_id = source_conn_id
         self.task_config = task_config
 
+
+    def convert(self, x):
+        if str(x.dtype).startswith('float'):
+            try:
+                return x.astype('Int64') #http://pandas.pydata.org/pandas-docs/stable/user_guide/integer_na.html
+            except:
+                return x
+        else:
+            return x
+
+
     # execute() method that runs when a task uses this operator, make sure to include the 'context' kwarg.
     def execute(self, context):
         # write to Airflow task logs
@@ -74,6 +85,7 @@ class CopyTableToCsv(BaseOperator):
         # self.log.info('COPY TABLE -> FILE ({0}, {1})'.format(table_name, csv_dir))
 
         df = hook.get_pandas_df(sql=self.task_config['fetch_data_qr'])
+        df=df.apply(self.convert)
         df.to_csv(csv_dir, mode='w', index=False)
 
 
