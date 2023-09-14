@@ -11,9 +11,6 @@ def replace_from_dict(s, replace_dict):
     try:
         s=s.replace('\\', '/')
         for key, val in replace_dict.items():
-            print('hi')
-            print(s)
-            print(key)
             s=s.replace(key, val)
     except AttributeError:
         pass
@@ -49,8 +46,8 @@ def update_task_runtime(dag_id, load_cf_task_id, ti):
                 except IndexError:
                     pass
                 else:
-                    print(task.task_id, task.map_index, task.start_date, task.end_date, task.duration, task.state)
-                    print(mapped_index)
+                    # print(task.task_id, task.map_index, task.start_date, task.end_date, task.duration, task.state)
+                    # print(mapped_index)
                     if task_id in mapped_index.keys():
                         task_id_in_cf_table=mapped_index[task_id][str(task.map_index)]
                         # get the TASK-level dag_run metadata!

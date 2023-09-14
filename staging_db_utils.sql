@@ -8,7 +8,7 @@ RETURNS varchar(500)
 as
 begin
 	declare @col_list varchar(500)
-	select @col_list=STRING_AGG(COLUMN_NAME, ', ')
+	select @col_list=STRING_AGG(QUOTENAME(COLUMN_NAME), ', ')
 	from INFORMATION_SCHEMA.COLUMNS
 	where TABLE_NAME=@table_name
 	return @col_list
@@ -21,7 +21,7 @@ CREATE OR ALTER PROC load_enable_task_config
 )
 AS
 BEGIN
-	select task_id, source_location, source_database, source_schema, source_table, target_location, target_database, target_schema, target_table, is_incre
+	select task_id, source_location, source_database, source_schema, source_table, target_location, target_database, target_schema, target_table
 	from config_table
 	where task_name=@task_name and enable=1
 END
@@ -80,16 +80,20 @@ GO
 
 CREATE OR ALTER PROC load_to_stage_table
 (
-	@file_path nvarchar(100),
-	@stage_table_name varchar(100),
-	@is_incre bit
+	@task_id INT
 )
 AS
 BEGIN
-	DECLARE @sql NVARCHAR(MAX)
-	IF @is_incre = 0
+	DECLARE @file_path nvarchar(100), @stage_table_name varchar(100), @is_incre bit, @sql NVARCHAR(MAX)
+
+	SELECT @file_path=source_location, @stage_table_name=target_table, @is_incre=is_incre
+	FROM config_table
+	where task_id=@task_id
+
+	BEGIN TRAN
+	IF @is_incre = 0 or @is_incre is null
 	BEGIN
-	--replace * by column list
+		--replace * by column list
 		set @sql=CONCAT('
 		select TOP 0 * into temp_table from ', @stage_table_name, '
 
@@ -103,7 +107,8 @@ BEGIN
 		(FIRSTROW = 2, 
 		FIELDTERMINATOR = '','',
 		ROWTERMINATOR = ''0x0A''
-		)')
+		)
+		')
 		EXEC(@sql)
 
 		DECLARE @col_list varchar(500)
@@ -146,11 +151,14 @@ BEGIN
 		drop table temp_table')
 		EXEC(@sql)
 	END
+	COMMIT TRAN
 END
 GO
 
-load_to_stage_table 'C:\temp\cycle-sale\testdb\dbo_Production_Location.csv', dbo_Production_Location, 0
-select * from dbo_Production_Location
+EXEC load_to_stage_table 68
+select * from config_table where task_id=68
+
+select * from [dbo].[Sales_SalesPerson]
 select * from dbo_Sales_CreditCard
 truncate table dbo_Production_Location
 truncate table dbo_Sales_CreditCard
@@ -160,7 +168,10 @@ truncate table dbo_Sales_CreditCard
 EXEC get_qr_for_select_data_of_task 57
 
 
-
+begin tran
+select TOP 0 * into temp_table from dbo_Sales_CreditCard
+rollback
+select * from temp_table
 
 
 

@@ -33,14 +33,7 @@ class LoadLandingToStagingArea(BaseOperator):
     def execute(self, context):
         # write to Airflow task logs
         hook = MsSqlHook(mssql_conn_id=self.target_conn_id)
-        is_incre=0
-        if self.task_config['is_incre']:
-            is_incre=self.task_config['is_incre']
-        hook.run("EXEC load_to_stage_table '{0}', '{1}', {2}".format(
-            self.task_config['source_location'].replace('/opt/airflow/landing_cycle-sale/testdb/', 'C:\\temp\\cycle-sale\\testdb\\'),
-            self.task_config['target_table'], 
-            is_incre
-            ))
+        hook.run("EXEC load_to_stage_table " + str(self.task_config['task_id']))
 
 
 default_args = {
