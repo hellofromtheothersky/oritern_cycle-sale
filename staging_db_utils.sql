@@ -8,7 +8,7 @@ RETURNS varchar(500)
 as
 begin
 	declare @col_list varchar(500)
-	select @col_list=STRING_AGG(QUOTENAME(COLUMN_NAME), ', ')
+	select @col_list= STRING_AGG(QUOTENAME(COLUMN_NAME), ', ')
 	from INFORMATION_SCHEMA.COLUMNS
 	where TABLE_NAME=@table_name
 	return @col_list
@@ -84,9 +84,9 @@ CREATE OR ALTER PROC load_to_stage_table
 )
 AS
 BEGIN
-	DECLARE @file_path nvarchar(100), @stage_table_name varchar(100), @is_incre bit, @sql NVARCHAR(MAX)
+	DECLARE @file_path nvarchar(100), @stage_table_name varchar(100), @is_incre bit, @key_col_name varchar(100), @sql NVARCHAR(MAX)
 
-	SELECT @file_path=source_location, @stage_table_name=target_table, @is_incre=is_incre
+	SELECT @file_path=source_location, @stage_table_name=target_table, @is_incre=is_incre, @key_col_name=key_col_name
 	FROM config_table
 	where task_id=@task_id
 
@@ -95,13 +95,13 @@ BEGIN
 	BEGIN
 		--replace * by column list
 		set @sql=CONCAT('
-		select TOP 0 * into temp_table from ', @stage_table_name, '
+		select TOP 0 * into temp_landing from ', @stage_table_name, '
 
-		alter table temp_table drop column checksum
-		alter table temp_table drop column is_deleted
-		alter table temp_table drop column is_current
+		alter table temp_landing drop column checksum
+		alter table temp_landing drop column is_deleted
+		alter table temp_landing drop column is_current
 
-		bulk INSERT temp_table
+		bulk INSERT temp_landing
 		FROM ''', @file_path, '''
 		WITH 
 		(FIRSTROW = 2, 
@@ -112,20 +112,43 @@ BEGIN
 		EXEC(@sql)
 
 		DECLARE @col_list varchar(500)
-		set @col_list=dbo.get_col_in_str('temp_table')
-		alter table temp_table add checksum binary(16)
+		set @col_list=dbo.get_col_in_str('temp_landing')
+		alter table temp_landing add checksum binary(16)
 
 		set @sql=CONCAT('
-		update temp_table 
+		update temp_landing 
 		set checksum=HASHBYTES(''MD5'', concat_ws(''~'', ', @col_list,')) 
 
-		update ', @stage_table_name, '
-		set is_deleted=1 where checksum not in (select checksum from temp_table)
+		select l.checksum as landing_checksum, 
+			   l.', @key_col_name,' as landing_key,
+			   s.checksum as stage_checksum,
+			   s.', @key_col_name,' as stage_key
+		into temp_compare_hash
+		from temp_landing l FULL OUTER JOIN ', @stage_table_name, ' s on l.checksum=s.checksum
 
 		insert into ', @stage_table_name, '
-		select *, NULL, NULL from temp_table where checksum not in (select checksum from ' ,@stage_table_name, ')
+		select *, 0, 1 from temp_landing where checksum in 
+		(select landing_checksum from temp_compare_hash 
+		where landing_checksum is not null and stage_checksum is null)
 
-		drop table temp_table')
+		update ', @stage_table_name, '
+		set is_deleted=1, is_current=0 
+		where checksum in (select stage_checksum from temp_compare_hash 
+							where stage_checksum is not null and landing_checksum is null) 
+		and ', @key_col_name,' not in (select landing_key from temp_compare_hash 
+									where landing_checksum is not null and stage_checksum is null)
+
+		update ', @stage_table_name, '
+		set is_deleted=0, is_current=0 
+		where checksum in (select stage_checksum from temp_compare_hash 
+							where stage_checksum is not null and landing_checksum is null) 
+		and ', @key_col_name,' in (select landing_key from temp_compare_hash 
+									where landing_checksum is not null and stage_checksum is null)
+
+
+		drop table temp_landing
+		drop table temp_compare_hash
+		')
 		EXEC(@sql)
 	END
 	ELSE
@@ -148,14 +171,13 @@ BEGIN
 		insert into ', @stage_table_name, '
 		select *, NULL, NULL, NULL from temp_table
 
-		drop table temp_table')
+		drop table temp_table
+		')
 		EXEC(@sql)
 	END
 	COMMIT TRAN
 END
 GO
-
-
 
 
 
