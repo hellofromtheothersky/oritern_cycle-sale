@@ -1,30 +1,4 @@
 ﻿use staging_db
-
--------------set data for config table
-drop table if exists config_table
-CREATE TABLE config_table (
-    task_id INT IDENTITY(1,1) PRIMARY KEY,
-    task_name VARCHAR(100),
-	source_location VARCHAR(100),
-	source_database VARCHAR(100),
-	source_schema VARCHAR(100),
-	source_table VARCHAR(100),
-	target_location VARCHAR(100),
-	target_database VARCHAR(100),
-	target_schema VARCHAR(100),
-	target_table VARCHAR(100),
-    enable BIT,
-    start_time datetimeoffset,
-    end_time datetimeoffset,
-	duration DECIMAL(18, 3),
-	status VARCHAR(50),
-    fail_reason VARCHAR(255),
-	is_incre bit,
-	key_col_name varchar(100),
-	time_col_name varchar(100),
-	last_load_run datetimeoffset,
-);
-
 CREATE OR ALTER PROC create_config_for_landing_db as
 begin
 	select TOP 0 * into #temp_table from config_table;
@@ -149,8 +123,7 @@ begin
 		target_table=LEFT(target_table, CHARINDEX('.', target_table) - 1)
 
 	update #temp_table
-	set target_location='C:\temp\cycle-sale\'+target_schema,
-	target_table=REPLACE(target_table, '-', '_')
+	set target_location='C:\temp\cycle-sale\'+target_schema
 
 	insert into config_table (task_name, 
 							source_location, 
@@ -212,7 +185,6 @@ begin
 	from #temp_table
 end
 GO
-
 
 --set landing
 truncate table config_table

@@ -396,3 +396,134 @@ checksum binary(16), is_deleted bit, is_current bit
 
 --CLOSE cursor_table_name              -- Đóng Cursor
 --DEALLOCATE cursor_table_name         -- Giải phóng tài nguyên
+
+
+
+
+
+
+
+
+
+
+create table [Person-GeneralContact]
+(
+  BusinessEntityID INT,
+  PersonType VARCHAR(2) ,
+  ModifiedDate DATETIME ,
+  FirstName VARCHAR(50),
+  MiddleName VARCHAR(50),
+  LastName VARCHAR(50),
+  PersonAddressDetail VARCHAR(50),
+  checksum binary(16), is_deleted bit, is_current bit
+ )
+
+
+create table [Person-IndividualCustomer]
+(
+  BusinessEntityID INT ,
+  PersonType VARCHAR(2) ,
+  ModifiedDate DATETIME,
+  FirstName VARCHAR(50),
+  MiddleName VARCHAR(50) ,
+  LastName VARCHAR(50) ,
+  AddressLine1 VARCHAR(100),
+  City VARCHAR(50),
+  PostalCode VARCHAR(10) ,
+  AddressName VARCHAR(50),
+  StateProvinceCode VARCHAR(10),
+  CountryRegionCode VARCHAR(10),
+  StateProvinceName VARCHAR(50),
+  checksum binary(16), is_deleted bit, is_current bit
+)
+
+
+create table [Person-Non-salesEmployee]
+(
+  BusinessEntityID INT ,
+  PersonType VARCHAR(2) ,
+  ModifiedDate DATETIME,
+  FirstName VARCHAR(50),
+  MiddleName VARCHAR(50) ,
+  LastName VARCHAR(50) ,
+  AddressLine1 VARCHAR(100),
+  City VARCHAR(50),
+  PostalCode VARCHAR(10) ,
+  AddressName VARCHAR(50),
+  StateProvinceCode VARCHAR(10),
+  CountryRegionCode VARCHAR(10),
+  StateProvinceName VARCHAR(50),
+  checksum binary(16), is_deleted bit, is_current bit
+)
+
+
+CREATE TABLE [Person-SalesPerson] (
+    BusinessEntityID INT,
+    PersonType VARCHAR(2),
+    ModifiedDate DATETIME,
+    FirstName VARCHAR(50),
+    MiddleName VARCHAR(50),
+    LastName VARCHAR(50),
+    AddressLine1 VARCHAR(100),
+    City VARCHAR(50),
+    PostalCode VARCHAR(20),
+    AddressName VARCHAR(50),
+    StateProvinceCode VARCHAR(10),
+    CountryRegionCode VARCHAR(10),
+    StateProvinceName VARCHAR(50),
+	checksum binary(16), is_deleted bit, is_current bit
+);
+
+create table [Person-StoreContact]
+(
+  BusinessEntityID INT,
+  PersonType VARCHAR(2) ,
+  ModifiedDate DATETIME ,
+  FirstName VARCHAR(50),
+  MiddleName VARCHAR(50),
+  LastName VARCHAR(50),
+  checksum binary(16), is_deleted bit, is_current bit
+)
+create table [Person-VendorContact]
+(
+	  BusinessEntityID INT,
+	  PersonType VARCHAR(2) ,
+	  ModifiedDate DATETIME ,
+	  FirstName VARCHAR(50),
+	  MiddleName VARCHAR(50),
+	  LastName VARCHAR(50),
+	  checksum binary(16), is_deleted bit, is_current bit
+)
+
+
+
+
+
+
+
+
+CREATE TABLE TransactionHistory (
+    ProductName VARCHAR(100),
+    TransactionID INT,
+    ProductID INT,
+    ReferenceOrderID INT,
+    ReferenceOrderLineID INT,
+    TransactionDate DATETIME,
+    TransactionType CHAR(1),
+    Quantity INT,
+    ActualCost DECIMAL(18, 2),
+    ModifiedDate DATETIME,
+	checksum binary(16), is_deleted bit, is_current bit
+);
+
+
+
+
+CREATE TABLE CountryOfBusinessEntity (
+    BusinessEntityID INT,
+    StateProvinceCode VARCHAR(2),
+    CountryRegionCode VARCHAR(2),
+    StateProvinceName VARCHAR(100),
+    CountryRegionName VARCHAR(100),
+	checksum binary(16), is_deleted bit, is_current bit
+);

@@ -1,4 +1,5 @@
 ﻿use staging_db
+Go
 
 create or alter function get_col_in_str
 (
@@ -13,7 +14,7 @@ begin
 	where TABLE_NAME=@table_name
 	return @col_list
 end
-
+Go
 
 CREATE OR ALTER PROC load_enable_task_config
 (
@@ -26,7 +27,6 @@ BEGIN
 	where task_name=@task_name and enable=1
 END
 GO
-
 
 CREATE OR ALTER PROC set_task_config
 (
@@ -45,7 +45,7 @@ BEGIN
 END
 GO
 
-
+--make the query to select data incrementally or full loading from a source table in config table
 CREATE OR ALTER PROC get_qr_for_select_data_of_task
 (
     @task_id INT
@@ -77,6 +77,116 @@ BEGIN
 END
 GO
 
+-- helper proc to load a file to database, and then load it to the staging table
+CREATE OR ALTER PROC load_table_to_external_table
+(
+	@filepath nvarchar(100),
+	@external_table_name varchar(100)
+)
+as
+begin
+	declare @sql NVARCHAR(MAX)
+	set @sql=CONCAT('
+		bulk INSERT ', @external_table_name,'
+		FROM ''', @filepath, '''
+		WITH 
+		(FIRSTROW = 2, 
+		FIELDTERMINATOR = '','',
+		ROWTERMINATOR = ''0x0A''
+		)')
+	EXEC(@sql)
+end
+Go
+
+CREATE OR ALTER PROC load_json_to_external_table
+(
+	@filepath nvarchar(100),
+	@json_file_option varchar(100),
+	@external_table_name varchar(100)
+)
+as
+begin
+	declare @sql NVARCHAR(MAX)
+
+	DECLARE @format_json varchar(MAX)
+	if @json_file_option='Person-GeneralContact' 
+		set @format_json='BusinessEntityID INT ''$.BusinessEntityID'',
+							PersonType VARCHAR(2) ''$.PersonType'',
+							ModifiedDate DATETIME ''$.ModifiedDate'',
+							FirstName VARCHAR(50) ''$.PersonInfo[0].FirstName'',
+							MiddleName VARCHAR(50) ''$.PersonInfo[0].MiddleName'',
+							LastName VARCHAR(50) ''$.PersonInfo[0].LastName'',
+							PersonAddressDetail VARCHAR(50) ''$.PersonInfo[0].PersonContact[0].PersonAddress[0].PersonAddressDetail'''
+
+	if @json_file_option='Person-IndividualCustomer'
+		set @format_json='  BusinessEntityID INT ''$.BusinessEntityID'',
+							PersonType VARCHAR(2) ''$.PersonType'',
+							ModifiedDate DATETIME ''$.ModifiedDate'',
+							FirstName VARCHAR(50) ''$.PersonInfo[0].FirstName'',
+							MiddleName VARCHAR(50) ''$.PersonInfo[0].MiddleName'',
+							LastName VARCHAR(50) ''$.PersonInfo[0].LastName'',
+							AddressLine1 VARCHAR(100) ''$.PersonInfo[0].PersonContact[0].AddressLine1'',
+							City VARCHAR(50) ''$.PersonInfo[0].PersonContact[0].City'',
+							PostalCode VARCHAR(10) ''$.PersonInfo[0].PersonContact[0].PostalCode'',
+							AddressName VARCHAR(50) ''$.PersonInfo[0].PersonContact[0].PersonAddress[0].AddressName'',
+							StateProvinceCode VARCHAR(10) ''$.PersonInfo[0].PersonContact[0].PersonAddress[0].PersonAddressDetail[0].StateProvinceCode'',
+							CountryRegionCode VARCHAR(10) ''$.PersonInfo[0].PersonContact[0].PersonAddress[0].PersonAddressDetail[0].CountryRegionCode'',
+							StateProvinceName VARCHAR(50) ''$.PersonInfo[0].PersonContact[0].PersonAddress[0].PersonAddressDetail[0].StateProvinceName'''
+	if @json_file_option='Person-Non-salesEmployee'
+		set @format_json='
+		    BusinessEntityID INT ''$[0].BusinessEntityID'',
+			PersonType VARCHAR(2) ''$[0].PersonType'',
+			ModifiedDate DATETIME ''$[0].ModifiedDate'',
+			FirstName VARCHAR(50) ''$[0].PersonInfo[0].FirstName'',
+			MiddleName VARCHAR(50) ''$[0].PersonInfo[0].MiddleName'',
+			LastName VARCHAR(50) ''$[0].PersonInfo[0].LastName'',
+			AddressLine1 VARCHAR(100) ''$[0].PersonInfo[0].PersonContact[0].AddressLine1'',
+			City VARCHAR(50) ''$[0].PersonInfo[0].PersonContact[0].City'',
+			PostalCode VARCHAR(10) ''$[0].PersonInfo[0].PersonContact[0].PostalCode'',
+			AddressName VARCHAR(50) ''$[0].PersonInfo[0].PersonContact[0].PersonAddress[0].AddressName'',
+			StateProvinceCode VARCHAR(10) ''$[0].PersonInfo[0].PersonContact[0].PersonAddress[0].PersonAddressDetail[0].StateProvinceCode'',
+			CountryRegionCode VARCHAR(10) ''$[0].PersonInfo[0].PersonContact[0].PersonAddress[0].PersonAddressDetail[0].CountryRegionCode'',
+			StateProvinceName VARCHAR(50) ''$[0].PersonInfo[0].PersonContact[0].PersonAddress[0].PersonAddressDetail[0].StateProvinceName'''
+	if @json_file_option='Person-SalesPerson'
+		set @format_json='  BusinessEntityID INT ''$.BusinessEntityID'',
+							PersonType VARCHAR(2) ''$.PersonType'',
+							ModifiedDate DATETIME ''$.ModifiedDate'',
+							FirstName VARCHAR(50) ''$.PersonInfo[0].FirstName'',
+							MiddleName VARCHAR(50) ''$.PersonInfo[0].MiddleName'',
+							LastName VARCHAR(50) ''$.PersonInfo[0].LastName'',
+							AddressLine1 VARCHAR(100) ''$.PersonInfo[0].PersonContact[0].AddressLine1'',
+							City VARCHAR(50) ''$.PersonInfo[0].PersonContact[0].City'',
+							PostalCode VARCHAR(10) ''$.PersonInfo[0].PersonContact[0].PostalCode'',
+							AddressName VARCHAR(50) ''$.PersonInfo[0].PersonContact[0].PersonAddress[0].AddressName'',
+							StateProvinceCode VARCHAR(10) ''$.PersonInfo[0].PersonContact[0].PersonAddress[0].PersonAddressDetail[0].StateProvinceCode'',
+							CountryRegionCode VARCHAR(10) ''$.PersonInfo[0].PersonContact[0].PersonAddress[0].PersonAddressDetail[0].CountryRegionCode'',
+							StateProvinceName VARCHAR(50) ''$.PersonInfo[0].PersonContact[0].PersonAddress[0].PersonAddressDetail[0].StateProvinceName'''
+	if @json_file_option='Person-StoreContact'
+		set @format_json='BusinessEntityID INT ''$.BusinessEntityID'',
+							PersonType VARCHAR(2) ''$.PersonType'',
+							ModifiedDate DATETIME ''$.ModifiedDate'',
+							FirstName VARCHAR(50) ''$.PersonInfo[0].FirstName'',
+							MiddleName VARCHAR(50) ''$.PersonInfo[0].MiddleName'',
+							LastName VARCHAR(50) ''$.PersonInfo[0].LastName'''
+	if @json_file_option='Person-VendorContact'
+		set @format_json='BusinessEntityID INT ''$.BusinessEntityID'',
+							PersonType VARCHAR(2) ''$.PersonType'',
+							ModifiedDate DATETIME ''$.ModifiedDate'',
+							FirstName VARCHAR(50) ''$.PersonInfo[0].FirstName'',
+							MiddleName VARCHAR(50) ''$.PersonInfo[0].MiddleName'',
+							LastName VARCHAR(50) ''$.PersonInfo[0].LastName'''
+	Set @sql=CONCAT('
+	Declare @JSON varchar(max)
+	SELECT @JSON=BulkColumn
+	FROM OPENROWSET (BULK ', QUOTENAME(@filepath, ''''), ', SINGLE_NCLOB) import
+	insert into ', QUOTENAME(@external_table_name),'
+	SELECT * FROM OPENJSON (@JSON)
+	WITH (
+		', @format_json,'
+	);')
+	EXEC (@sql)
+END
+Go
 
 CREATE OR ALTER PROC load_to_stage_table
 (
@@ -84,61 +194,74 @@ CREATE OR ALTER PROC load_to_stage_table
 )
 AS
 BEGIN
-	DECLARE @file_path nvarchar(100), @stage_table_name varchar(100), @is_incre bit, @key_col_name varchar(100), @sql NVARCHAR(MAX)
+	SET XACT_ABORT ON
+	-- init variables
+	DECLARE @file_path nvarchar(100), 
+			@file_type varchar(10),
+			@stage_table_name varchar(100), 
+			@is_incre bit, 
+			@key_col_name varchar(100), 
+			@external_table_name varchar(100),
+			@sql NVARCHAR(MAX)
 
-	SELECT @file_path=source_location, @stage_table_name=target_table, @is_incre=is_incre, @key_col_name=key_col_name
+	SELECT  @file_path=CONCAT(source_location, '\', source_table, '.', source_schema), 
+			@file_type=source_schema,
+			@stage_table_name=target_table, 
+			@is_incre=is_incre, 
+			@key_col_name=key_col_name
 	FROM config_table
 	where task_id=@task_id
 
+	Set @external_table_name='temp_'+@stage_table_name
+
+	-- init external table
 	BEGIN TRAN
+
+	SET @sql=CONCAT('
+	drop table if exists', QUOTENAME(@external_table_name),'
+	select TOP 0 * into ', QUOTENAME(@external_table_name),' from ', QUOTENAME(@stage_table_name), '
+	alter table ', QUOTENAME(@external_table_name),' drop column checksum
+	alter table ', QUOTENAME(@external_table_name),' drop column is_deleted
+	alter table ', QUOTENAME(@external_table_name),' drop column is_current')
+	EXEC(@sql)	
+	
+	if @file_type = 'json' 
+		EXEC load_json_to_external_table @file_path, @stage_table_name, @external_table_name
+	else 
+		EXEC load_table_to_external_table @file_path, @external_table_name
+
+	-- load to stage
 	IF @is_incre = 0 or @is_incre is null
 	BEGIN
-		--replace * by column list
+		DECLARE @col_list varchar(500) = dbo.get_col_in_str(@external_table_name)
+
 		set @sql=CONCAT('
-		select TOP 0 * into temp_landing from ', @stage_table_name, '
-
-		alter table temp_landing drop column checksum
-		alter table temp_landing drop column is_deleted
-		alter table temp_landing drop column is_current
-
-		bulk INSERT temp_landing
-		FROM ''', @file_path, '''
-		WITH 
-		(FIRSTROW = 2, 
-		FIELDTERMINATOR = '','',
-		ROWTERMINATOR = ''0x0A''
-		)
-		')
+		alter table ', QUOTENAME(@external_table_name),' add checksum binary(16)')
 		EXEC(@sql)
 
-		DECLARE @col_list varchar(500)
-		set @col_list=dbo.get_col_in_str('temp_landing')
-		alter table temp_landing add checksum binary(16)
-
 		set @sql=CONCAT('
-		update temp_landing 
-		set checksum=HASHBYTES(''MD5'', concat_ws(''~'', ', @col_list,')) 
+		update ', QUOTENAME(@external_table_name),' set checksum=HASHBYTES(''MD5'', concat_ws(''~'', ', @col_list,')) 
 
 		select l.checksum as landing_checksum, 
 			   l.', @key_col_name,' as landing_key,
 			   s.checksum as stage_checksum,
 			   s.', @key_col_name,' as stage_key
 		into temp_compare_hash
-		from temp_landing l FULL OUTER JOIN ', @stage_table_name, ' s on l.checksum=s.checksum
+		from ', QUOTENAME(@external_table_name),' l FULL OUTER JOIN ', QUOTENAME(@stage_table_name), ' s on l.checksum=s.checksum
 
-		insert into ', @stage_table_name, '
-		select *, 0, 1 from temp_landing where checksum in 
+		insert into ', QUOTENAME(@stage_table_name), '
+		select *, 0, 1 from ', QUOTENAME(@external_table_name),' where checksum in 
 		(select landing_checksum from temp_compare_hash 
 		where landing_checksum is not null and stage_checksum is null)
 
-		update ', @stage_table_name, '
+		update ', QUOTENAME(@stage_table_name), '
 		set is_deleted=1, is_current=0 
 		where checksum in (select stage_checksum from temp_compare_hash 
 							where stage_checksum is not null and landing_checksum is null) 
 		and ', @key_col_name,' not in (select landing_key from temp_compare_hash 
 									where landing_checksum is not null and stage_checksum is null)
 
-		update ', @stage_table_name, '
+		update ', QUOTENAME(@stage_table_name), '
 		set is_deleted=0, is_current=0 
 		where checksum in (select stage_checksum from temp_compare_hash 
 							where stage_checksum is not null and landing_checksum is null) 
@@ -146,7 +269,7 @@ BEGIN
 									where landing_checksum is not null and stage_checksum is null)
 
 
-		drop table temp_landing
+		drop table ', QUOTENAME(@external_table_name),'
 		drop table temp_compare_hash
 		')
 		EXEC(@sql)
@@ -154,31 +277,13 @@ BEGIN
 	ELSE
 	BEGIN
 		set @sql=CONCAT('
-		select TOP 0 * into temp_table from ', @stage_table_name, '
-
-		alter table temp_table drop column checksum
-		alter table temp_table drop column is_deleted
-		alter table temp_table drop column is_current
-
-		bulk INSERT temp_table
-		FROM ''', @file_path, '''
-		WITH 
-		(FIRSTROW = 2, 
-		FIELDTERMINATOR = '','',
-		ROWTERMINATOR = ''0x0A''
-		)
-
 		insert into ', @stage_table_name, '
-		select *, NULL, NULL, NULL from temp_table
+		select *, NULL, NULL, NULL from ', QUOTENAME(@external_table_name),'
 
-		drop table temp_table
+		drop table ', QUOTENAME(@external_table_name),'
 		')
 		EXEC(@sql)
 	END
 	COMMIT TRAN
 END
 GO
-
-
-
-
