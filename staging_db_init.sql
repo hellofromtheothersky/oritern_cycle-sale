@@ -125,6 +125,9 @@ begin
 	update #temp_table
 	set target_location='C:\temp\cycle-sale\'+target_schema
 
+	update #temp_table
+	set target_schema='csv' where target_schema='xlsx'
+
 	insert into config_table (task_name, 
 							source_location, 
 							source_database, 

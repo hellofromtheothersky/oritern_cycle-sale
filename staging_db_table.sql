@@ -517,8 +517,6 @@ CREATE TABLE TransactionHistory (
 );
 
 
-
-
 CREATE TABLE CountryOfBusinessEntity (
     BusinessEntityID INT,
     StateProvinceCode VARCHAR(2),
