@@ -104,26 +104,28 @@ CREATE OR ALTER PROC create_config_for_landing_file as
 begin
 	select TOP 0 * into #temp_table from config_table;
 	
-	INSERT INTO #temp_table(task_name, source_location) VALUES 
-	('landing_csv', '\\NW-ORIENTINTERN\SharedData\CSV\TransactionHistory.csv'), 
-	('landing_excel', '\\NW-ORIENTINTERN\SharedData\Excel\CountryOfBusinessEntity.xlsx'),
-	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json\Person-GeneralContact.json'),
-	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json\Person-IndividualCustomer.json'),
-	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json\Person-Non-salesEmployee.json'),
-	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json\Person-SalesPerson.json'),
-	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json\Person-StoreContact.json'),
-	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json\Person-VendorContact.json')
+	INSERT INTO #temp_table(task_name, source_location, source_table, source_schema) VALUES 
+	('landing_csv', '\\NW-ORIENTINTERN\SharedData\CSV\', 'TransactionHistory', 'csv'), 
+	('landing_excel', '\\NW-ORIENTINTERN\SharedData\Excel', 'CountryOfBusinessEntity', 'xlsx'),
+	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json', 'Person-GeneralContact', 'json'),
+	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json', 'Person-IndividualCustomer', 'json'),
+	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json', 'Person-Non-salesEmployee', 'json'),
+	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json', 'Person-SalesPerson', 'json'),
+	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json', 'Person-StoreContact', 'json'),
+	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json', 'Person-VendorContact', 'json')
 
+
+	--update #temp_table
+	--set target_table=RIGHT(source_location, CHARINDEX('\', REVERSE(source_location)) - 1)
+
+	--update #temp_table
+	--set target_schema=RIGHT(target_table, CHARINDEX('.', REVERSE(target_table)) - 1),
+	--	target_table=LEFT(target_table, CHARINDEX('.', target_table) - 1)
 
 	update #temp_table
-	set target_table=RIGHT(source_location, CHARINDEX('\', REVERSE(source_location)) - 1)
-
-	update #temp_table
-	set target_schema=RIGHT(target_table, CHARINDEX('.', REVERSE(target_table)) - 1),
-		target_table=LEFT(target_table, CHARINDEX('.', target_table) - 1)
-
-	update #temp_table
-	set target_location='C:\temp\cycle-sale\'+target_schema
+	set target_location='C:\temp\cycle-sale\'+source_schema,
+	target_table=source_table,
+	target_schema=source_schema
 
 	update #temp_table
 	set target_schema='csv' where target_schema='xlsx'

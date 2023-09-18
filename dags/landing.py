@@ -102,7 +102,7 @@ class CopyXlsxToCsv(BaseOperator):
 
     # execute() method that runs when a task uses this operator, make sure to include the 'context' kwarg.
     def execute(self, context):
-        source_dir=self.task_config['source_location']
+        source_dir="{0}/{1}.{2}".format(self.task_config['source_location'], self.task_config['source_table'], self.task_config['source_schema'])
         target_dir="{0}/{1}.{2}".format(self.task_config['target_location'], self.task_config['target_table'], self.task_config['target_schema'])
 
         if not os.path.exists(self.task_config['target_location']):
@@ -124,7 +124,7 @@ class CopyFile(BashOperator):
             *args, **kwargs):
 
         bash_str=""
-        source_dir=task_config['source_location']
+        source_dir="{0}/{1}.{2}".format(task_config['source_location'], task_config['source_table'], task_config['source_schema'])
         target_dir="{0}/{1}.{2}".format(task_config['target_location'], task_config['target_table'], task_config['target_schema'])
 
         # self.log.info('COPY FILE -> FILE ({0}, {1})'.format(source_dir, target_dir)) #not run
