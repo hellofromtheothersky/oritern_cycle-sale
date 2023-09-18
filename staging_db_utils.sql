@@ -90,7 +90,8 @@ begin
 		bulk INSERT ', @external_table_name,'
 		FROM ''', @filepath, '''
 		WITH 
-		(FIRSTROW = 2, 
+		(FORMAT = ''CSV'',
+		FIRSTROW = 2, 
 		FIELDTERMINATOR = '','',
 		ROWTERMINATOR = ''0x0A''
 		)')

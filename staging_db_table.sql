@@ -155,7 +155,7 @@ CREATE TABLE [Production_ProductCostHistory] (
 checksum binary(16), is_deleted bit, is_current bit
 )
 CREATE TABLE [Production_ProductDescription] (
-[ProductDescriptionID] int NOT NULL,[Description] nvarchar(400) NOT NULL,[rowguid] uniqueidentifier NOT NULL,[ModifiedDate] datetime NOT NULL,
+[ProductDescriptionID] int NOT NULL,[Description] nvarchar(800) NOT NULL,[rowguid] uniqueidentifier NOT NULL,[ModifiedDate] datetime NOT NULL,
 checksum binary(16), is_deleted bit, is_current bit
 )
 CREATE TABLE [Sales_ShoppingCartItem] (
@@ -409,7 +409,7 @@ checksum binary(16), is_deleted bit, is_current bit
 create table [Person-GeneralContact]
 (
   BusinessEntityID INT,
-  PersonType VARCHAR(2) ,
+  PersonType VARCHAR(5) ,
   ModifiedDate DATETIME ,
   FirstName VARCHAR(50),
   MiddleName VARCHAR(50),
@@ -422,7 +422,7 @@ create table [Person-GeneralContact]
 create table [Person-IndividualCustomer]
 (
   BusinessEntityID INT ,
-  PersonType VARCHAR(2) ,
+  PersonType VARCHAR(5) ,
   ModifiedDate DATETIME,
   FirstName VARCHAR(50),
   MiddleName VARCHAR(50) ,
@@ -441,7 +441,7 @@ create table [Person-IndividualCustomer]
 create table [Person-Non-salesEmployee]
 (
   BusinessEntityID INT ,
-  PersonType VARCHAR(2) ,
+  PersonType VARCHAR(5) ,
   ModifiedDate DATETIME,
   FirstName VARCHAR(50),
   MiddleName VARCHAR(50) ,
@@ -459,7 +459,7 @@ create table [Person-Non-salesEmployee]
 
 CREATE TABLE [Person-SalesPerson] (
     BusinessEntityID INT,
-    PersonType VARCHAR(2),
+    PersonType VARCHAR(5),
     ModifiedDate DATETIME,
     FirstName VARCHAR(50),
     MiddleName VARCHAR(50),
@@ -477,7 +477,7 @@ CREATE TABLE [Person-SalesPerson] (
 create table [Person-StoreContact]
 (
   BusinessEntityID INT,
-  PersonType VARCHAR(2) ,
+  PersonType VARCHAR(5) ,
   ModifiedDate DATETIME ,
   FirstName VARCHAR(50),
   MiddleName VARCHAR(50),
@@ -487,7 +487,7 @@ create table [Person-StoreContact]
 create table [Person-VendorContact]
 (
 	  BusinessEntityID INT,
-	  PersonType VARCHAR(2) ,
+	  PersonType VARCHAR(5) ,
 	  ModifiedDate DATETIME ,
 	  FirstName VARCHAR(50),
 	  MiddleName VARCHAR(50),
@@ -509,7 +509,7 @@ CREATE TABLE TransactionHistory (
     ReferenceOrderID INT,
     ReferenceOrderLineID INT,
     TransactionDate DATETIME,
-    TransactionType CHAR(1),
+    TransactionType CHAR(5),
     Quantity INT,
     ActualCost DECIMAL(18, 2),
     ModifiedDate DATETIME,
@@ -519,8 +519,8 @@ CREATE TABLE TransactionHistory (
 
 CREATE TABLE CountryOfBusinessEntity (
     BusinessEntityID INT,
-    StateProvinceCode VARCHAR(2),
-    CountryRegionCode VARCHAR(2),
+    StateProvinceCode VARCHAR(5),
+    CountryRegionCode VARCHAR(5),
     StateProvinceName VARCHAR(100),
     CountryRegionName VARCHAR(100),
 	checksum binary(16), is_deleted bit, is_current bit

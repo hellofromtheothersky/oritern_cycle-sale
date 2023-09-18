@@ -70,6 +70,8 @@ class CopyTableToCsv(BaseOperator):
                 return x.astype('Int64') #http://pandas.pydata.org/pandas-docs/stable/user_guide/integer_na.html
             except:
                 return x
+        elif str(x.dtype)=='bool':
+            return x.astype('int') 
         else:
             return x
 
