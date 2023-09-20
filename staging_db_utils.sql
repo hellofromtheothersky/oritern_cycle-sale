@@ -16,6 +16,23 @@ begin
 end
 Go
 
+create or alter function get_col_in_str_and_xml_convert
+(
+	@table_name varchar(100)
+)
+RETURNS varchar(500)
+as
+begin
+	declare @col_list varchar(500)
+	select @col_list=STRING_AGG(case DATA_TYPE when 'xml' 
+					then CONCAT('convert(varchar(MAX), ', QUOTENAME(COLUMN_NAME),')')
+					else QUOTENAME(COLUMN_NAME) end, ', ')
+	from INFORMATION_SCHEMA.COLUMNS
+	where TABLE_NAME=@table_name
+	return @col_list
+end
+Go
+
 CREATE OR ALTER PROC load_enable_task_config
 (
     @task_name VARCHAR(100)
@@ -230,11 +247,12 @@ BEGIN
 		EXEC load_json_to_external_table @file_path, @stage_table_name, @external_table_name
 	else 
 		EXEC load_table_to_external_table @file_path, @external_table_name
-
+	
+	print 'loaded to external tb'
 	-- load to stage
 	IF @is_incre = 0 or @is_incre is null
 	BEGIN
-		DECLARE @col_list varchar(500) = dbo.get_col_in_str(@external_table_name)
+		DECLARE @col_list varchar(500) = dbo.get_col_in_str_and_xml_convert(@external_table_name)
 
 		set @sql=CONCAT('
 		alter table ', QUOTENAME(@external_table_name),' add checksum binary(16)')
@@ -242,6 +260,7 @@ BEGIN
 
 		set @sql=CONCAT('
 		update ', QUOTENAME(@external_table_name),' set checksum=HASHBYTES(''MD5'', concat_ws(''~'', ', @col_list,')) 
+		print ''hash value created''
 
 		select l.checksum as landing_checksum, 
 			   l.', @key_col_name,' as landing_key,

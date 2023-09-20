@@ -38,7 +38,7 @@ class LoadLandingToStagingArea(BaseOperator):
 
 default_args = {
     'owner': 'hieu_nguyen',
-    'retries': 5,
+    'retries': 0,
     'retry_delay': timedelta(minutes=1)
 }
 def format_yyyymmdd(datetime):
