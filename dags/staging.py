@@ -65,7 +65,7 @@ with DAG(
     with TaskGroup(group_id='staging') as staging:
         landing_test_db_db = LoadLandingToStagingArea.partial(
             task_id='staging',
-            target_conn_id='staging_staging_db_db',
+            target_conn_id='warehouse_warehouse_db_db',
             max_active_tis_per_dagrun=2,
         ).expand(task_config=load_enable_task_config('staging'))
 

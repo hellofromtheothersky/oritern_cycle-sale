@@ -1,7 +1,7 @@
-﻿use staging_db
+﻿drop database warehouse_db
 CREATE OR ALTER PROC create_config_for_landing_db as
 begin
-	select TOP 0 * into #temp_table from config_table;
+	select TOP 0 * into #temp_table from stg.config_table;
 
 	--generated code
 	INSERT INTO #temp_table(source_database, source_schema, source_table) VALUES ('BicycleRetailer', 'Sales', 'SalesOrderHeaderSalesReason')
@@ -76,7 +76,7 @@ begin
 	update #temp_table
 	set task_name='landing_hrdb_db' where source_database='HRDB'
 
-	insert into config_table (task_name, 
+	insert into stg.config_table (task_name, 
 							source_location, 
 							source_database, 
 							source_schema,
@@ -102,7 +102,7 @@ GO
 
 CREATE OR ALTER PROC create_config_for_landing_file as
 begin
-	select TOP 0 * into #temp_table from config_table;
+	select TOP 0 * into #temp_table from stg.config_table;
 	
 	INSERT INTO #temp_table(task_name, source_location, source_table, source_schema) VALUES 
 	('landing_csv', '\\NW-ORIENTINTERN\SharedData\CSV\', 'TransactionHistory', 'csv'), 
@@ -130,7 +130,7 @@ begin
 	update #temp_table
 	set target_schema='csv' where target_schema='xlsx'
 
-	insert into config_table (task_name, 
+	insert into stg.config_table (task_name, 
 							source_location, 
 							source_database, 
 							source_schema,
@@ -154,18 +154,18 @@ GO
 
 CREATE OR ALTER PROC create_config_for_staging_all as
 begin
-	select TOP 0 * into #temp_table from config_table;
+	select TOP 0 * into #temp_table from stg.config_table;
 	
 	INSERT INTO #temp_table(is_incre, target_table, source_location, source_schema, source_table, key_col_name) 
-	select is_incre, target_table, target_location, target_schema, target_table, key_col_name from config_table
+	select is_incre, target_table, target_location, target_schema, target_table, key_col_name from stg.config_table
 
 	update #temp_table
 	set task_name='staging',
 		target_database='staging_db',
-		target_schema='dbo',
-		key_col_name=left(dbo.get_col_in_str(target_table), charindex(',', dbo.get_col_in_str(target_table))-1)
+		target_schema='stg',
+		key_col_name=left(dbo.get_col_in_str('stg', target_table), charindex(',', dbo.get_col_in_str('stg', target_table))-1)
 
-	insert into config_table (task_name, 
+	insert into stg.config_table (task_name, 
 							source_location, 
 							source_database, 
 							source_schema,
@@ -192,17 +192,18 @@ end
 GO
 
 --set landing
-truncate table config_table
+truncate table stg.config_table
 EXEC create_config_for_landing_db
 EXEC create_config_for_landing_file
 
 --set increment
-update config_table set is_incre=1 where task_name='landing_test_db_db' and source_table='Sales_CreditCard'
+update stg.config_table set is_incre=1 where task_name='landing_test_db_db' and source_table='Sales_CreditCard'
 
 --set staging
 EXEC create_config_for_staging_all
-select * from config_table where is_incre=1
+select * from stg.config_table where is_incre=1
 
 --set enable task
-update config_table set enable=1 where task_name='landing_test_db_db' or source_location LIKE 'C:\temp\cycle-sale\testdb\%'
-select * from config_table where enable=1
+update stg.config_table set enable=1 where task_name='landing_test_db_db' or source_location LIKE 'C:\temp\cycle-sale\testdb\%'
+update stg.config_table set enable=1 where task_id=123 or task_id=124
+select * from stg.config_table where enable=1

@@ -174,7 +174,7 @@ with DAG(
 
         landing_bicycle_retailer_db = CopyTableToCsv.partial(
             task_id='landing_bicycle_retailer_db',
-            source_conn_id='source_bicycle_retailer_db',
+            source_conn_id='source_bicycleretailer_db',
             max_active_tis_per_dagrun=2,
         ).expand(task_config=load_enable_task_config('landing_bicycle_retailer_db'))
 

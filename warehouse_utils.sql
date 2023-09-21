@@ -1,8 +1,8 @@
-﻿use staging_db
-Go
+﻿use warehouse_db
 
 create or alter function get_col_in_str
 (
+	@schema_name varchar(100),
 	@table_name varchar(100)
 )
 RETURNS varchar(500)
@@ -11,13 +11,14 @@ begin
 	declare @col_list varchar(500)
 	select @col_list= STRING_AGG(QUOTENAME(COLUMN_NAME), ', ')
 	from INFORMATION_SCHEMA.COLUMNS
-	where TABLE_NAME=@table_name
+	where TABLE_NAME=@table_name and TABLE_SCHEMA=@schema_name
 	return @col_list
 end
 Go
 
 create or alter function get_col_in_str_and_xml_convert
-(
+(	
+	@schema_name varchar(100),
 	@table_name varchar(100)
 )
 RETURNS varchar(500)
@@ -28,7 +29,7 @@ begin
 					then CONCAT('convert(varchar(MAX), ', QUOTENAME(COLUMN_NAME),')')
 					else QUOTENAME(COLUMN_NAME) end, ', ')
 	from INFORMATION_SCHEMA.COLUMNS
-	where TABLE_NAME=@table_name
+	where TABLE_NAME=@table_name and TABLE_SCHEMA=@schema_name
 	return @col_list
 end
 Go
@@ -40,7 +41,7 @@ CREATE OR ALTER PROC load_enable_task_config
 AS
 BEGIN
 	select task_id, source_location, source_database, source_schema, source_table, target_location, target_database, target_schema, target_table
-	from config_table
+	from stg.config_table
 	where task_name=@task_name and enable=1
 END
 GO
@@ -56,7 +57,7 @@ CREATE OR ALTER PROC set_task_config
 )
 AS
 BEGIN
-	update config_table 
+	update stg.config_table 
 	set start_time=@start_time, end_time=@end_time, duration=@duration, status=@status, last_load_run=@last_load_run
 	where task_id=@task_id
 END
@@ -75,7 +76,7 @@ BEGIN
 
     SELECT @source_schema = source_schema, @source_table = source_table, 
            @is_incre = is_incre, @time_col_name = time_col_name, @last_load_run = last_load_run 
-    FROM config_table
+    FROM stg.config_table
     WHERE task_id = @task_id
 
     SET @table_name = CONCAT(@source_schema, '.', @source_table)
@@ -119,7 +120,7 @@ Go
 CREATE OR ALTER PROC load_json_to_external_table
 (
 	@filepath nvarchar(100),
-	@json_file_option varchar(100),
+	@json_file_opt nvarchar(100),
 	@external_table_name varchar(100)
 )
 as
@@ -127,7 +128,7 @@ begin
 	declare @sql NVARCHAR(MAX)
 
 	DECLARE @format_json varchar(MAX)
-	if @json_file_option='Person-GeneralContact' 
+	if @json_file_opt='Person-GeneralContact' 
 		set @format_json='BusinessEntityID INT ''$.BusinessEntityID'',
 							PersonType VARCHAR(2) ''$.PersonType'',
 							ModifiedDate DATETIME ''$.ModifiedDate'',
@@ -136,7 +137,7 @@ begin
 							LastName VARCHAR(50) ''$.PersonInfo[0].LastName'',
 							PersonAddressDetail VARCHAR(50) ''$.PersonInfo[0].PersonContact[0].PersonAddress[0].PersonAddressDetail'''
 
-	if @json_file_option='Person-IndividualCustomer'
+	if @json_file_opt='Person-IndividualCustomer'
 		set @format_json='  BusinessEntityID INT ''$.BusinessEntityID'',
 							PersonType VARCHAR(2) ''$.PersonType'',
 							ModifiedDate DATETIME ''$.ModifiedDate'',
@@ -150,7 +151,7 @@ begin
 							StateProvinceCode VARCHAR(10) ''$.PersonInfo[0].PersonContact[0].PersonAddress[0].PersonAddressDetail[0].StateProvinceCode'',
 							CountryRegionCode VARCHAR(10) ''$.PersonInfo[0].PersonContact[0].PersonAddress[0].PersonAddressDetail[0].CountryRegionCode'',
 							StateProvinceName VARCHAR(50) ''$.PersonInfo[0].PersonContact[0].PersonAddress[0].PersonAddressDetail[0].StateProvinceName'''
-	if @json_file_option='Person-Non-salesEmployee'
+	if @json_file_opt='Person-Non-salesEmployee'
 		set @format_json='
 		    BusinessEntityID INT ''$[0].BusinessEntityID'',
 			PersonType VARCHAR(2) ''$[0].PersonType'',
@@ -165,7 +166,7 @@ begin
 			StateProvinceCode VARCHAR(10) ''$[0].PersonInfo[0].PersonContact[0].PersonAddress[0].PersonAddressDetail[0].StateProvinceCode'',
 			CountryRegionCode VARCHAR(10) ''$[0].PersonInfo[0].PersonContact[0].PersonAddress[0].PersonAddressDetail[0].CountryRegionCode'',
 			StateProvinceName VARCHAR(50) ''$[0].PersonInfo[0].PersonContact[0].PersonAddress[0].PersonAddressDetail[0].StateProvinceName'''
-	if @json_file_option='Person-SalesPerson'
+	if @json_file_opt='Person-SalesPerson'
 		set @format_json='  BusinessEntityID INT ''$.BusinessEntityID'',
 							PersonType VARCHAR(2) ''$.PersonType'',
 							ModifiedDate DATETIME ''$.ModifiedDate'',
@@ -179,14 +180,14 @@ begin
 							StateProvinceCode VARCHAR(10) ''$.PersonInfo[0].PersonContact[0].PersonAddress[0].PersonAddressDetail[0].StateProvinceCode'',
 							CountryRegionCode VARCHAR(10) ''$.PersonInfo[0].PersonContact[0].PersonAddress[0].PersonAddressDetail[0].CountryRegionCode'',
 							StateProvinceName VARCHAR(50) ''$.PersonInfo[0].PersonContact[0].PersonAddress[0].PersonAddressDetail[0].StateProvinceName'''
-	if @json_file_option='Person-StoreContact'
+	if @json_file_opt='Person-StoreContact'
 		set @format_json='BusinessEntityID INT ''$.BusinessEntityID'',
 							PersonType VARCHAR(2) ''$.PersonType'',
 							ModifiedDate DATETIME ''$.ModifiedDate'',
 							FirstName VARCHAR(50) ''$.PersonInfo[0].FirstName'',
 							MiddleName VARCHAR(50) ''$.PersonInfo[0].MiddleName'',
 							LastName VARCHAR(50) ''$.PersonInfo[0].LastName'''
-	if @json_file_option='Person-VendorContact'
+	if @json_file_opt='Person-VendorContact'
 		set @format_json='BusinessEntityID INT ''$.BusinessEntityID'',
 							PersonType VARCHAR(2) ''$.PersonType'',
 							ModifiedDate DATETIME ''$.ModifiedDate'',
@@ -197,7 +198,7 @@ begin
 	Declare @JSON varchar(max)
 	SELECT @JSON=BulkColumn
 	FROM OPENROWSET (BULK ', QUOTENAME(@filepath, ''''), ', SINGLE_NCLOB) import
-	insert into ', QUOTENAME(@external_table_name),'
+	insert into ', @external_table_name,'
 	SELECT * FROM OPENJSON (@JSON)
 	WITH (
 		', @format_json,'
@@ -217,49 +218,59 @@ BEGIN
 	DECLARE @file_path nvarchar(100), 
 			@file_type varchar(10),
 			@stage_table_name varchar(100), 
+			@stage_schema_name varchar(100), 
+			@stage_table varchar(100),
 			@is_incre bit, 
 			@key_col_name varchar(100), 
+			@external_table varchar(100),
 			@external_table_name varchar(100),
+			@external_schema_name varchar(100),
 			@sql NVARCHAR(MAX)
 
 	SELECT  @file_path=CONCAT(source_location, '\', source_table, '.', source_schema), 
 			@file_type=source_schema,
-			@stage_table_name=target_table, 
-			@is_incre=is_incre, 
-			@key_col_name=key_col_name
-	FROM config_table
-	where task_id=@task_id
 
-	Set @external_table_name='temp_'+@stage_table_name
+			@stage_table=target_schema+'.'+QUOTENAME(target_table), 
+			@stage_table_name=target_table,
+			@stage_schema_name=target_schema,
+
+			@is_incre=is_incre, 
+			@key_col_name=key_col_name,
+
+			@external_table=target_schema+'.[temp_'+target_table+']',
+			@external_table_name='temp_'+target_table,
+			@external_schema_name=target_schema
+	FROM stg.config_table
+	where task_id=@task_id
 
 	-- init external table
 	BEGIN TRAN
 
 	SET @sql=CONCAT('
-	drop table if exists', QUOTENAME(@external_table_name),'
-	select TOP 0 * into ', QUOTENAME(@external_table_name),' from ', QUOTENAME(@stage_table_name), '
-	alter table ', QUOTENAME(@external_table_name),' drop column checksum
-	alter table ', QUOTENAME(@external_table_name),' drop column is_deleted
-	alter table ', QUOTENAME(@external_table_name),' drop column is_current')
+	drop table if exists ', @external_table,'
+	select TOP 0 * into ', @external_table,' from ', @stage_table, '
+	alter table ', @external_table,' drop column checksum
+	alter table ', @external_table,' drop column is_deleted
+	alter table ', @external_table,' drop column is_current')
 	EXEC(@sql)	
 	
 	if @file_type = 'json' 
-		EXEC load_json_to_external_table @file_path, @stage_table_name, @external_table_name
+		EXEC load_json_to_external_table @file_path, @stage_table_name, @external_table
 	else 
-		EXEC load_table_to_external_table @file_path, @external_table_name
+		EXEC load_table_to_external_table @file_path, @external_table
 	
 	print 'loaded to external tb'
 	-- load to stage
 	IF @is_incre = 0 or @is_incre is null
 	BEGIN
-		DECLARE @col_list varchar(500) = dbo.get_col_in_str_and_xml_convert(@external_table_name)
+		DECLARE @col_list varchar(500) = dbo.get_col_in_str_and_xml_convert(@external_schema_name, @external_table_name)
 
 		set @sql=CONCAT('
-		alter table ', QUOTENAME(@external_table_name),' add checksum binary(16)')
+		alter table ', @external_table,' add checksum binary(16)')
 		EXEC(@sql)
 
 		set @sql=CONCAT('
-		update ', QUOTENAME(@external_table_name),' set checksum=HASHBYTES(''MD5'', concat_ws(''~'', ', @col_list,')) 
+		update ', @external_table,' set checksum=HASHBYTES(''MD5'', concat_ws(''~'', ', @col_list,')) 
 		print ''hash value created''
 
 		select l.checksum as landing_checksum, 
@@ -267,21 +278,21 @@ BEGIN
 			   s.checksum as stage_checksum,
 			   s.', @key_col_name,' as stage_key
 		into temp_compare_hash
-		from ', QUOTENAME(@external_table_name),' l FULL OUTER JOIN ', QUOTENAME(@stage_table_name), ' s on l.checksum=s.checksum
+		from ', @external_table,' l FULL OUTER JOIN ', @stage_table, ' s on l.checksum=s.checksum
 
-		insert into ', QUOTENAME(@stage_table_name), '
-		select *, 0, 1 from ', QUOTENAME(@external_table_name),' where checksum in 
+		insert into ', @stage_table, '
+		select *, 0, 1 from ', @external_table,' where checksum in 
 		(select landing_checksum from temp_compare_hash 
 		where landing_checksum is not null and stage_checksum is null)
 
-		update ', QUOTENAME(@stage_table_name), '
+		update ', @stage_table, '
 		set is_deleted=1, is_current=0 
 		where checksum in (select stage_checksum from temp_compare_hash 
 							where stage_checksum is not null and landing_checksum is null) 
 		and ', @key_col_name,' not in (select landing_key from temp_compare_hash 
 									where landing_checksum is not null and stage_checksum is null)
 
-		update ', QUOTENAME(@stage_table_name), '
+		update ', @stage_table, '
 		set is_deleted=0, is_current=0 
 		where checksum in (select stage_checksum from temp_compare_hash 
 							where stage_checksum is not null and landing_checksum is null) 
@@ -289,21 +300,24 @@ BEGIN
 									where landing_checksum is not null and stage_checksum is null)
 
 
-		drop table ', QUOTENAME(@external_table_name),'
+		drop table ', @external_table,'
 		drop table temp_compare_hash
 		')
+		print @sql
 		EXEC(@sql)
 	END
 	ELSE
 	BEGIN
 		set @sql=CONCAT('
-		insert into ', @stage_table_name, '
-		select *, NULL, NULL, NULL from ', QUOTENAME(@external_table_name),'
+		insert into ', @stage_table, '
+		select *, NULL, NULL, NULL from ', @external_table,'
 
-		drop table ', QUOTENAME(@external_table_name),'
+		drop table ', @external_table,'
 		')
 		EXEC(@sql)
 	END
 	COMMIT TRAN
 END
 GO
+
+EXEC load_to_stage_table 67

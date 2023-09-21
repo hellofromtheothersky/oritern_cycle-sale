@@ -56,16 +56,16 @@ x-airflow-common:
     &airflow-common-env
     AIRFLOW_VAR_VOL_MAPPING: '{"C:/temp/cycle-sale": "/opt/airflow/landing_cycle-sale", "//NW-ORIENTINTERN/SharedData": "/opt/airflow/source"}'
 
-    AIRFLOW_CONN_STAGING_STAGING_DB_DB: '{
+    AIRFLOW_CONN_WAREHOUSE_WAREHOUSE_DB_DB: '{
     "conn_type": "mssql",
     "login": "hieuthuhai",
     "password": "abc@123456789",
     "host": "host.docker.internal",
     "port": 1433,
-    "schema": "staging_db"
+    "schema": "warehouse_db"
     }'
 
-    AIRFLOW_CONN_SOURCE_BICYCLE_RETAILER_DB: '{
+    AIRFLOW_CONN_SOURCE_BICYCLERETAILER_DB: '{
     "conn_type": "mssql",
     "login": "DE-Intern",
     "password": "Orient@12345",

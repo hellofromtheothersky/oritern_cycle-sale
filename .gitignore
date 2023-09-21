@@ -161,3 +161,4 @@ cython_debug/
 
 
 logs/
+warehouse_dim_fact.sql

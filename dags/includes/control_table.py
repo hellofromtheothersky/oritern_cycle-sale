@@ -4,7 +4,7 @@ from airflow.models.dagbag import DagBag
 from airflow.decorators import  task
 from airflow.models import Variable
 
-STAGING_CON='staging_staging_db_db'
+WAREHOUSE_CONN='warehouse_warehouse_db_db'
 VOL_MAPPING = Variable.get("VOL_MAPPING", deserialize_json=True)
 
 def replace_from_dict(s, replace_dict):
@@ -30,7 +30,7 @@ def update_task_runtime(dag_id, load_cf_task_id, ti):
             i+=1
         else: i=-1
 
-    hook = MsSqlHook(mssql_conn_id=STAGING_CON)
+    hook = MsSqlHook(mssql_conn_id=WAREHOUSE_CONN)
     dag = DagBag().get_dag(dag_id)
     last_dagrun_run_id = dag.get_last_dagrun(include_externally_triggered=True)
 
@@ -59,7 +59,7 @@ def load_enable_task_config(task_name, ti=None):
     """
         return config parameter of every enable child task of a task from task_name
     """
-    hook = MsSqlHook(mssql_conn_id=STAGING_CON)
+    hook = MsSqlHook(mssql_conn_id=WAREHOUSE_CONN)
     config_df = hook.get_pandas_df(sql="EXEC load_enable_task_config {0}".format(task_name))
     config_df_dict=config_df.to_dict("records")
     
