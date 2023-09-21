@@ -268,37 +268,37 @@ BEGIN
 		set @sql=CONCAT('
 		alter table ', @external_table,' add checksum binary(16)')
 		EXEC(@sql)
-
+		--temp_compare_hash conflict
 		set @sql=CONCAT('
 		update ', @external_table,' set checksum=HASHBYTES(''MD5'', concat_ws(''~'', ', @col_list,')) 
 		print ''hash value created''
-
+		
 		select l.checksum as landing_checksum, 
-			   l.', @key_col_name,' as landing_key,
-			   s.checksum as stage_checksum,
-			   s.', @key_col_name,' as stage_key
+			   l.', @key_col_name,' as nal_key,
+			   s.checksum as stage_checksum
 		into temp_compare_hash
-		from ', @external_table,' l FULL OUTER JOIN ', @stage_table, ' s on l.checksum=s.checksum
+		from ', @external_table,' l INNER JOIN ', @stage_table, ' s on l.', @key_col_name,' = s.', @key_col_name,'
+		where s.is_current=1
 
-		insert into ', @stage_table, '
-		select *, 0, 1 from ', @external_table,' where checksum in 
-		(select landing_checksum from temp_compare_hash 
-		where landing_checksum is not null and stage_checksum is null)
+		--source dont have key that stage have -> source delete
+			update ', @stage_table, '
+			set is_deleted=1, is_current=0 
+			where ', @key_col_name,' not in (select nal_key from temp_compare_hash)
 
-		update ', @stage_table, '
-		set is_deleted=1, is_current=0 
-		where checksum in (select stage_checksum from temp_compare_hash 
-							where stage_checksum is not null and landing_checksum is null) 
-		and ', @key_col_name,' not in (select landing_key from temp_compare_hash 
-									where landing_checksum is not null and stage_checksum is null)
+		--source have key that stage have -> source update
+			update ', @stage_table, '
+			set is_deleted=0, is_current=0
+			where ', @key_col_name,' in (select nal_key from temp_compare_hash where landing_checksum<>stage_checksum)
+			and is_current=1
 
-		update ', @stage_table, '
-		set is_deleted=0, is_current=0 
-		where checksum in (select stage_checksum from temp_compare_hash 
-							where stage_checksum is not null and landing_checksum is null) 
-		and ', @key_col_name,' in (select landing_key from temp_compare_hash 
-									where landing_checksum is not null and stage_checksum is null)
+			insert into ', @stage_table, '
+			select *, 0, 1 from ', @external_table,' where ', @key_col_name,' in
+			(select nal_key from temp_compare_hash where landing_checksum<>stage_checksum)
 
+		--source have key that stage dont have -> source insert
+			insert into ', @stage_table, '
+			select *, 0, 1 from ', @external_table,' where ', @key_col_name,' not in
+			(select nal_key from temp_compare_hash)
 
 		drop table ', @external_table,'
 		drop table temp_compare_hash
@@ -320,4 +320,13 @@ BEGIN
 END
 GO
 
-EXEC load_to_stage_table 67
+EXEC load_to_stage_table 124
+select * from stg.dbo_Production_Location
+
+select * from stg.config_table
+
+select * from stg.dbo_Production_Location
+
+truncate table stg.dbo_Production_Location
+
+
