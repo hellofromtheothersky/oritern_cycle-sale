@@ -54,12 +54,12 @@ x-airflow-common:
   build: .
   environment:
     &airflow-common-env
-    AIRFLOW_VAR_VOL_MAPPING: '{"C:/temp/cycle-sale": "/opt/airflow/landing_cycle-sale", "//NW-ORIENTINTERN/SharedData": "/opt/airflow/source"}'
+    AIRFLOW_VAR_VOL_MAPPING: '{"C:/temp/cycle-sale": "/opt/airflow/landing_cycle-sale", "C:/Users/HIEU/Desktop/mydevice_cycle_sale/source": "/opt/airflow/source"}'
 
     AIRFLOW_CONN_WAREHOUSE_WAREHOUSE_DB_DB: '{
     "conn_type": "mssql",
-    "login": "hieuthuhai",
-    "password": "abc@123456789",
+    "login": "sa",
+    "password": "14102002",
     "host": "host.docker.internal",
     "port": 1433,
     "schema": "warehouse_db"
@@ -67,26 +67,26 @@ x-airflow-common:
 
     AIRFLOW_CONN_SOURCE_BICYCLERETAILER_DB: '{
     "conn_type": "mssql",
-    "login": "DE-Intern",
-    "password": "Orient@12345",
-    "host": "192.168.68.27",
+    "login": "sa",
+    "password": "14102002",
+    "host": "host.docker.internal",
     "port": 1433,
     "schema": "BicycleRetailer"
     }'
 
     AIRFLOW_CONN_SOURCE_HRDB_DB: '{
     "conn_type": "mssql",
-    "login": "DE-Intern",
-    "password": "Orient@12345",
-    "host": "192.168.68.27",
+    "login": "sa",
+    "password": "14102002",
+    "host": "host.docker.internal",
     "port": 1433,
     "schema": "hrdb"
     }'
 
     AIRFLOW_CONN_SOURCE_TEST_DB_DB: '{
     "conn_type": "mssql",
-    "login": "hieuthuhai",
-    "password": "abc@123456789",
+    "login": "sa",
+    "password": "14102002",
     "host": "host.docker.internal",
     "port": 1433,
     "schema": "test_db"
@@ -117,7 +117,7 @@ x-airflow-common:
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
     - ${AIRFLOW_PROJ_DIR:-.}/includes:/opt/airflow/includes
     - C:\temp\cycle-sale:/opt/airflow/landing_cycle-sale
-    - cif-volume:/opt/airflow/source
+    - C:\Users\HIEU\Desktop\mydevice_cycle_sale\source:/opt/airflow/source
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
     &airflow-common-depends-on
@@ -351,12 +351,12 @@ services:
 
     
 volumes:
-  cif-volume:
-    driver: local 
-    driver_opts:
-      type: cifs
-      device: //NW-ORIENTINTERN/SharedData
-      o: addr=NW-ORIENTINTERN,username=hieu.nguyenhung,file_mode=0777,dir_mode=0777,password=907856@Hb
+  # cif-volume:
+  #   driver: local 
+  #   driver_opts:
+  #     type: cifs
+  #     device: //NW-ORIENTINTERN/SharedData
+  #     o: addr=NW-ORIENTINTERN,username=hieu.nguyenhung,file_mode=0777,dir_mode=0777,password=907856@Hb
   postgres-db-volume:
   # can be empty, use the default driver configured by the engine -> local driver
   # nas-share:

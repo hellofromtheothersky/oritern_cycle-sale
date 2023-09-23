@@ -8,10 +8,11 @@ create or alter function get_col_in_str
 RETURNS varchar(500)
 as
 begin
-	declare @col_list varchar(500)
-	select @col_list= STRING_AGG(QUOTENAME(COLUMN_NAME), ', ')
+	declare @col_list varchar(MAX)
+	select @col_list= STRING_AGG(QUOTENAME(COLUMN_NAME), ', ') WITHIN GROUP (ORDER BY ORDINAL_POSITION)
 	from INFORMATION_SCHEMA.COLUMNS
 	where TABLE_NAME=@table_name and TABLE_SCHEMA=@schema_name
+
 	return @col_list
 end
 Go

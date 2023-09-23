@@ -20,7 +20,7 @@ CREATE TABLE stg.config_table (
 	status VARCHAR(50),
     fail_reason VARCHAR(255),
 	is_incre bit,
-	key_col_name varchar(100),
+	key_col_name varchar(max),
 	time_col_name varchar(100),
 	last_load_run datetimeoffset,
 );

@@ -1,5 +1,4 @@
-﻿drop database warehouse_db
-CREATE OR ALTER PROC create_config_for_landing_db as
+﻿CREATE OR ALTER PROC create_config_for_landing_db as
 begin
 	select TOP 0 * into #temp_table from stg.config_table;
 
@@ -105,14 +104,14 @@ begin
 	select TOP 0 * into #temp_table from stg.config_table;
 	
 	INSERT INTO #temp_table(task_name, source_location, source_table, source_schema) VALUES 
-	('landing_csv', '\\NW-ORIENTINTERN\SharedData\CSV\', 'TransactionHistory', 'csv'), 
-	('landing_excel', '\\NW-ORIENTINTERN\SharedData\Excel', 'CountryOfBusinessEntity', 'xlsx'),
-	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json', 'Person-GeneralContact', 'json'),
-	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json', 'Person-IndividualCustomer', 'json'),
-	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json', 'Person-Non-salesEmployee', 'json'),
-	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json', 'Person-SalesPerson', 'json'),
-	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json', 'Person-StoreContact', 'json'),
-	('landing_json', '\\NW-ORIENTINTERN\SharedData\Json', 'Person-VendorContact', 'json')
+	('landing_csv', 'C:\Users\HIEU\Desktop\mydevice_cycle_sale\source\CSV\', 'TransactionHistory', 'csv'), 
+	('landing_excel', 'C:\Users\HIEU\Desktop\mydevice_cycle_sale\source\Excel', 'CountryOfBusinessEntity', 'xlsx'),
+	('landing_json', 'C:\Users\HIEU\Desktop\mydevice_cycle_sale\source\Json', 'Person-GeneralContact', 'json'),
+	('landing_json', 'C:\Users\HIEU\Desktop\mydevice_cycle_sale\source\Json', 'Person-IndividualCustomer', 'json'),
+	('landing_json', 'C:\Users\HIEU\Desktop\mydevice_cycle_sale\source\Json', 'Person-Non-salesEmployee', 'json'),
+	('landing_json', 'C:\Users\HIEU\Desktop\mydevice_cycle_sale\source\Json', 'Person-SalesPerson', 'json'),
+	('landing_json', 'C:\Users\HIEU\Desktop\mydevice_cycle_sale\source\Json', 'Person-StoreContact', 'json'),
+	('landing_json', 'C:\Users\HIEU\Desktop\mydevice_cycle_sale\source\Json', 'Person-VendorContact', 'json')
 
 
 	--update #temp_table
