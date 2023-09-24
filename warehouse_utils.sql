@@ -1,22 +1,43 @@
 ﻿use warehouse_db
 
-create or alter function get_col_in_str
+create or alter function get_col_seq
 (
 	@schema_name varchar(100),
-	@table_name varchar(100)
+	@table_name varchar(100),
+	@prefix varchar(100) = NULL
 )
-RETURNS varchar(500)
+RETURNS varchar(MAX)
 as
 begin
-	declare @col_list varchar(500)
-	select @col_list= STRING_AGG(QUOTENAME(COLUMN_NAME), ', ')
+	declare @col_list varchar(MAX)
+
+	select @col_list= STRING_AGG(COALESCE(@prefix+'.', '')+QUOTENAME(COLUMN_NAME), ', ') WITHIN GROUP (ORDER BY ORDINAL_POSITION)
 	from INFORMATION_SCHEMA.COLUMNS
 	where TABLE_NAME=@table_name and TABLE_SCHEMA=@schema_name
+
 	return @col_list
 end
 Go
 
-create or alter function get_col_in_str_and_xml_convert
+create or alter function get_first_col
+(	
+	@schema_name varchar(100),
+	@table_name varchar(100)
+)
+RETURNS varchar(100)
+as
+begin
+	declare @first_col varchar(100)
+	select @first_col= COLUMN_NAME
+	from INFORMATION_SCHEMA.COLUMNS
+	where TABLE_NAME=@table_name and TABLE_SCHEMA=@schema_name and ORDINAL_POSITION=1
+
+	return @first_col
+end
+Go
+
+
+create or alter function get_col_seq_and_xml_convert
 (	
 	@schema_name varchar(100),
 	@table_name varchar(100)
@@ -33,6 +54,7 @@ begin
 	return @col_list
 end
 Go
+
 
 CREATE OR ALTER PROC load_enable_task_config
 (
@@ -263,7 +285,7 @@ BEGIN
 	-- load to stage
 	IF @is_incre = 0 or @is_incre is null
 	BEGIN
-		DECLARE @col_list varchar(500) = dbo.get_col_in_str_and_xml_convert(@external_schema_name, @external_table_name)
+		DECLARE @col_list varchar(500) = dbo.get_col_seq_and_xml_convert(@external_schema_name, @external_table_name)
 
 		set @sql=CONCAT('
 		alter table ', @external_table,' add checksum binary(16)')
@@ -320,13 +342,190 @@ BEGIN
 END
 GO
 
-EXEC load_to_stage_table 124
-select * from stg.dbo_Production_Location
 
-select * from stg.config_table
+create or alter proc load_to_dim_scd2
+(
+	@task_id int
+)
+as
+begin
+	DECLARE @src_schma varchar(100),
+			@src_table varchar(100),
+			@dim_schma varchar(100),
+			@dim_table varchar(100),
+			@key VARCHAR(100),
+			@src_time varchar(100)
+			
 
-select * from stg.dbo_Production_Location
+	SELECT  @src_schma = source_schema,
+			@src_table = source_table,
+			@dim_schma = target_schema,
+			@dim_table = target_table,
+			@key = QUOTENAME(key_col_name),
+			@src_time = QUOTENAME(time_col_name)
+	from stg.config_table
+	where task_id=@task_id
 
-truncate table stg.dbo_Production_Location
+	DECLARE @src VARCHAR(100) = CONCAT(@src_schma, '.', @src_table)
+	DECLARE @dim VARCHAR(100) = CONCAT(@dim_schma, '.', @dim_table)  
+	
+	DECLARE @src_col_without_time_col VARCHAR(max) = REPLACE(dbo.get_col_seq(@src_schma, @src_table, NULL), ', '+@src_time, '')
+	DECLARE @src_col_prefix  VARCHAR(max) = dbo.get_col_seq(@src_schma, @src_table, 'source')
+
+	DECLARE @sql nvarchar(max) =
+	CONCAT('
+	insert into ', @dim,'
+	(	
+		--Table and columns in which to insert the data
+		', @src_col_without_time_col,',
+		[start_date],
+		[end_date],
+		[is_current]
+	)
+	select    
+		', @src_col_without_time_col,',
+		[start_date],
+		[end_date],
+		[is_current]
+	from
+	(
+		MERGE into ', @dim,' AS target
+		USING 
+		(
+		SELECT *
+		from ', @src,'
+		) AS source 
+		ON target.', @key,' = source.', @key,' and target.[is_current]=1
+
+		--delete old record from updating
+		WHEN MATCHED 
+			and target.[start_date] < source.[ModifiedDate]
+		THEN 
+			UPDATE SET [end_date]=source.[ModifiedDate], is_current=0
+		--delete record
+		WHEN NOT MATCHED BY SOURCE and target.[is_current]=1
+		THEN
+			UPDATE SET is_current=0
+		--insert record
+		WHEN NOT MATCHED BY TARGET
+		THEN 
+			INSERT 
+			(
+			', @src_col_without_time_col,',
+			[start_date],
+			[end_date],
+			[is_current]
+			)
+			VALUES 
+			(
+			', @src_col_prefix,',
+			''12/31/9999'',
+			1
+			)
+		OUTPUT $action as ''action'', 
+		', @src_col_prefix,',
+		''12/31/9999'',
+		1
+	) -- the end of the merge statement
+	--The changes output below are the records that have changed and will need
+	--to be inserted into the slowly changing dimension.
+	as changes
+	(
+	[action],
+		', @src_col_without_time_col,',
+	[start_date],
+	[end_date],
+	[is_current]
+	)
+	where action=''UPDATE'' and ', @key,' is not null;
+	')
+	print @sql
+	EXEC(@sql)
+end
+go
+
+create proc load_to_dim_Date 
+(
+	@StartDate  date
+)
+AS
+begin
+	DECLARE @CutoffDate date = DATEADD(DAY, -1, DATEADD(YEAR, 30, @StartDate));
+
+	;WITH seq(n) AS 
+	(
+	  SELECT 0 UNION ALL SELECT n + 1 FROM seq
+	  WHERE n < DATEDIFF(DAY, @StartDate, @CutoffDate)
+	),
+	d(d) AS 
+	(
+	  SELECT DATEADD(DAY, n, @StartDate) FROM seq
+	),
+	src AS
+	(
+	  SELECT
+		TheDate         = CONVERT(date, d),
+		TheDay          = DATEPART(DAY,       d),
+		TheDayName      = DATENAME(WEEKDAY,   d),
+		TheWeek         = DATEPART(WEEK,      d),
+		TheISOWeek      = DATEPART(ISO_WEEK,  d),
+		TheDayOfWeek    = DATEPART(WEEKDAY,   d),
+		TheMonth        = DATEPART(MONTH,     d),
+		TheMonthName    = DATENAME(MONTH,     d),
+		TheQuarter      = DATEPART(Quarter,   d),
+		TheYear         = DATEPART(YEAR,      d),
+		TheFirstOfMonth = DATEFROMPARTS(YEAR(d), MONTH(d), 1),
+		TheLastOfYear   = DATEFROMPARTS(YEAR(d), 12, 31),
+		TheDayOfYear    = DATEPART(DAYOFYEAR, d)
+	  FROM d
+	),
+	dim AS
+	(
+	  SELECT
+		YYYYMMDD              = TheYear*10000+TheMonth*100+TheDay,
+		TheDate, 
+		TheDay,
+		TheDaySuffix        = CONVERT(char(2), CASE WHEN TheDay / 10 = 1 THEN 'th' ELSE 
+								CASE RIGHT(TheDay, 1) WHEN '1' THEN 'st' WHEN '2' THEN 'nd' 
+								WHEN '3' THEN 'rd' ELSE 'th' END END),
+		TheDayName,
+		TheDayOfWeek,
+		TheDayOfWeekInMonth = CONVERT(tinyint, ROW_NUMBER() OVER 
+								(PARTITION BY TheFirstOfMonth, TheDayOfWeek ORDER BY TheDate)),
+		TheDayOfYear,
+		IsWeekend           = CASE WHEN TheDayOfWeek IN (CASE @@DATEFIRST WHEN 1 THEN 6 WHEN 7 THEN 1 END,7) 
+								THEN 1 ELSE 0 END,
+		TheWeek,
+		TheISOweek,
+		TheFirstOfWeek      = DATEADD(DAY, 1 - TheDayOfWeek, TheDate),
+		TheLastOfWeek       = DATEADD(DAY, 6, DATEADD(DAY, 1 - TheDayOfWeek, TheDate)),
+		TheWeekOfMonth      = CONVERT(tinyint, DENSE_RANK() OVER 
+								(PARTITION BY TheYear, TheMonth ORDER BY TheWeek)),
+		TheMonth,
+		TheMonthName,
+		TheFirstOfMonth,
+		TheLastOfMonth      = MAX(TheDate) OVER (PARTITION BY TheYear, TheMonth),
+		TheFirstOfNextMonth = DATEADD(MONTH, 1, TheFirstOfMonth),
+		TheLastOfNextMonth  = DATEADD(DAY, -1, DATEADD(MONTH, 2, TheFirstOfMonth)),
+		TheQuarter,
+		TheFirstOfQuarter   = MIN(TheDate) OVER (PARTITION BY TheYear, TheQuarter),
+		TheLastOfQuarter    = MAX(TheDate) OVER (PARTITION BY TheYear, TheQuarter),
+		TheYear,
+		TheISOYear          = TheYear - CASE WHEN TheMonth = 1 AND TheISOWeek > 51 THEN 1 
+								WHEN TheMonth = 12 AND TheISOWeek = 1  THEN -1 ELSE 0 END,      
+		TheFirstOfYear      = DATEFROMPARTS(TheYear, 1,  1),
+		TheLastOfYear,
+		IsLeapYear          = CONVERT(bit, CASE WHEN (TheYear % 400 = 0) 
+								OR (TheYear % 4 = 0 AND TheYear % 100 <> 0) 
+								THEN 1 ELSE 0 END)
+	  FROM src
+	)
+	insert into df.dim_Date
+	SELECT * FROM dim
+	  ORDER BY TheDate
+	  OPTION (MAXRECURSION 0);
+end
 
 
+--truncate table df.dim_Date
+--exec load_to_dim_Date '20000101'

@@ -165,7 +165,7 @@ with DAG(
         task_id='archiving',
     )
 
-    with TaskGroup(group_id='landing') as landing:
+    with TaskGroup(group_id='landing_gr') as landing_gr:
         landing_test_db_db = CopyTableToCsv.partial(
             task_id='landing_test_db_db',
             source_conn_id='source_test_db_db',
@@ -202,7 +202,7 @@ with DAG(
     update_task_runtime = PythonOperator(
         task_id='update_task_runtime',
         python_callable=update_task_runtime,
-        op_kwargs={'dag_id': 'landing', 'load_cf_task_id': 'load_enable_task_config'},
+        op_kwargs={'dag_id': 'landing', 'load_cf_task_id': 'landing_gr.load_enable_task_config'},
         trigger_rule=TriggerRule.ALL_DONE,
     )
 
@@ -212,4 +212,4 @@ with DAG(
         do_xcom_push=False,
     )
 
-    start>>archiving>>landing>>update_task_runtime>>end
+    start>>archiving>>landing_gr>>update_task_runtime>>end

@@ -24,7 +24,7 @@ def update_task_runtime(dag_id, load_cf_task_id, ti):
         sub="__"+str(i)
         if i==0:
             sub=""
-        a=ti.xcom_pull(task_ids=dag_id+'.'+load_cf_task_id+sub, key="mapped_index")
+        a=ti.xcom_pull(task_ids=load_cf_task_id+sub, key="mapped_index")
         if a:
             mapped_index.update(a)
             i+=1
@@ -44,10 +44,11 @@ def update_task_runtime(dag_id, load_cf_task_id, ti):
                 try:
                     task_id=task.task_id.split('.')[1]
                 except IndexError:
+                    print('IndexError')
                     pass
                 else:
-                    # print(task.task_id, task.map_index, task.start_date, task.end_date, task.duration, task.state)
-                    # print(mapped_index)
+                    print(task.task_id, task.map_index, task.start_date, task.end_date, task.duration, task.state)
+                    print(mapped_index)
                     if task_id in mapped_index.keys():
                         task_id_in_cf_table=mapped_index[task_id][str(task.map_index)]
                         # get the TASK-level dag_run metadata!
