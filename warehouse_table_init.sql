@@ -13,16 +13,16 @@ CREATE TABLE stg.config_table (
 	target_database VARCHAR(100),
 	target_schema VARCHAR(100),
 	target_table VARCHAR(100),
+	is_incre bit,
+	key_col_name varchar(max),
+	time_col_name varchar(100),
     enable BIT,
     start_time datetimeoffset,
     end_time datetimeoffset,
 	duration DECIMAL(18, 3),
 	status VARCHAR(50),
     fail_reason VARCHAR(255),
-	is_incre bit,
-	key_col_name varchar(max),
-	time_col_name varchar(100),
-	last_load_run datetimeoffset,
+	last_load_run datetimeoffset
 );
 
 
