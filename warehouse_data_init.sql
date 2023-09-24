@@ -209,7 +209,6 @@ CREATE OR ALTER PROC create_config_for_load_dim as
 begin
 	select TOP 0 * into #temp_table from stg.config_table;
 	
-	INSERT INTO #temp_table(target_table) VALUES ('dim_Date')
 	INSERT INTO #temp_table(target_table) VALUES ('dim_Product')
 	INSERT INTO #temp_table(target_table) VALUES ('dim_SalesTerritory')
 	INSERT INTO #temp_table(target_table) VALUES ('dim_SpeciaOffer')
@@ -272,4 +271,5 @@ EXEC create_config_for_load_dim
 --set enable task
 update stg.config_table set enable=1 where task_name='landing_test_db_db' or source_location LIKE 'C:\temp\cycle-sale\testdb\%'
 update stg.config_table set enable=1 where task_id=123 or task_id=124
+update stg.config_table set enable=1 where task_id=134
 select * from stg.config_table where enable=1
