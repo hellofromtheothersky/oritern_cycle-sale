@@ -216,6 +216,7 @@ begin
 	INSERT INTO #temp_table(target_table) VALUES ('dim_Customer')
 	INSERT INTO #temp_table(target_table) VALUES ('dim_SalesPerson')
 
+
 	update #temp_table
 	set task_name='load_dim',
 		source_database='warehouse_db',
@@ -256,20 +257,51 @@ begin
 end
 GO
 
-truncate table stg.config_table
---set landing
-EXEC create_config_for_landing_db
-EXEC create_config_for_landing_file
---set increment
-update stg.config_table set is_incre=1 where task_name='landing_test_db_db' and source_table='Sales_CreditCard'
-select * from stg.config_table where is_incre=1
---set staging
-EXEC create_config_for_staging_all
---set load dim
-EXEC create_config_for_load_dim
 
---set enable task
-update stg.config_table set enable=1 where task_name='landing_test_db_db' or source_location LIKE 'C:\temp\cycle-sale\testdb\%'
-update stg.config_table set enable=1 where task_id=123 or task_id=124
-update stg.config_table set enable=1 where task_id=134
-select * from stg.config_table where enable=1
+CREATE OR ALTER PROC create_config_for_load_fact as
+begin
+	select TOP 0 * into #temp_table from stg.config_table;
+	
+	INSERT INTO #temp_table(target_table) VALUES ('fact_SaleProduct')
+	INSERT INTO #temp_table(target_table) VALUES ('fact_SaleHeader')
+	INSERT INTO #temp_table(target_table) VALUES ('fact_SaleStatus')
+	INSERT INTO #temp_table(target_table) VALUES ('fact_Inventory')
+
+
+	update #temp_table
+	set task_name='load_fact',
+		source_database='warehouse_db',
+		source_schema='stg',
+		source_table='v_'+target_table,
+		target_database='warehouse_db',
+		target_schema='DF',
+		time_col_name='date_key'
+
+
+	insert into stg.config_table (task_name, 
+							source_location, 
+							source_database, 
+							source_schema,
+							source_table,
+							target_location,
+							target_database,
+							target_schema,
+							target_table,
+							key_col_name,
+							time_col_name,
+							is_incre)
+	select task_name, 
+			source_location, 
+			source_database, 
+			source_schema,
+			source_table,
+			target_location,
+			target_database,
+			target_schema,
+			target_table,
+			key_col_name,
+			time_col_name,
+			is_incre
+	from #temp_table
+end
+GO

@@ -1,5 +1,6 @@
 ﻿use warehouse_db
 
+go
 create or alter function get_col_seq
 (
 	@schema_name varchar(100),
@@ -52,6 +53,18 @@ begin
 	from INFORMATION_SCHEMA.COLUMNS
 	where TABLE_NAME=@table_name and TABLE_SCHEMA=@schema_name
 	return @col_list
+end
+Go
+
+
+create or alter function YYYYMMDD_int_format
+(	
+	@datetime datetime
+)
+RETURNS int
+as
+begin
+	return CONVERT(INT, CONVERT(VARCHAR(8), @datetime, 112))
 end
 Go
 
@@ -444,6 +457,43 @@ begin
 end
 go
 
+
+create or alter proc load_to_fact
+(
+	@task_id int
+)
+as
+begin
+	 DECLARE @src_schma varchar(100),
+			@src_table varchar(100),
+			@fct_schma varchar(100),
+			@fct_table varchar(100),
+			@src_time varchar(100),
+			@last_load_run int
+			
+
+	SELECT  @src_schma = source_schema,
+			@src_table = source_table,
+			@fct_schma = target_schema,
+			@fct_table = target_table,
+			@src_time = QUOTENAME(time_col_name),
+			@last_load_run = dbo.YYYYMMDD_int_format(last_load_run)
+	from stg.config_table
+	where task_id=@task_id
+
+	DECLARE @src VARCHAR(100) = CONCAT(@src_schma, '.', @src_table)
+	DECLARE @fct VARCHAR(100) = CONCAT(@fct_schma, '.', @fct_table) 
+
+	DECLARE @sql NVARCHAR(200)
+	set @sql=CONCAT('INSERT INTO ', @fct,'
+			select * from ', @src)
+	if @last_load_run is not null
+	set @sql=@sql+CONCAT(' where ', @src_time, ' > ', @last_load_run)
+	print @sql
+	EXEC(@sql)
+end
+
+
 create proc load_to_dim_Date 
 (
 	@StartDate  date
@@ -525,7 +575,3 @@ begin
 	  ORDER BY TheDate
 	  OPTION (MAXRECURSION 0);
 end
-
-
---truncate table df.dim_Date
---exec load_to_dim_Date '20000101'
