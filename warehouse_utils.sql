@@ -148,6 +148,7 @@ begin
 		FIELDTERMINATOR = '','',
 		ROWTERMINATOR = ''0x0A''
 		)')
+	print @sql
 	EXEC(@sql)
 end
 Go
@@ -287,6 +288,7 @@ BEGIN
 	alter table ', @external_table,' drop column checksum
 	alter table ', @external_table,' drop column is_deleted
 	alter table ', @external_table,' drop column is_current')
+	print @sql
 	EXEC(@sql)	
 	
 	if @file_type = 'json' 
@@ -338,7 +340,6 @@ BEGIN
 		drop table ', @external_table,'
 		drop table temp_compare_hash
 		')
-		print @sql
 		EXEC(@sql)
 	END
 	ELSE
@@ -351,6 +352,7 @@ BEGIN
 		')
 		EXEC(@sql)
 	END
+	print @sql
 	COMMIT TRAN
 END
 GO

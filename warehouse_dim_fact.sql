@@ -49,6 +49,8 @@ GO
 CREATE TABLE [df].[fact_stock] (
   [ProductKey] int,
   [DateKey] Int,
+  [VendorKey] Int,
+  [CustomerKeu] Int,
   [QuantityIn] int,
   [QuantityOut] int,
 )
@@ -188,7 +190,7 @@ GO
 
 CREATE TABLE [df].[dim_Customer] (
   [CustomerKey] int IDENTITY(1, 1),
-  [BusinessEntityID] INT,
+  [CustomerID] INT,
   [PersonType] VARCHAR(5),
   [ModifiedDate] DATETIME,
   [FirstName] VARCHAR(50),
@@ -209,7 +211,7 @@ GO
 
 CREATE TABLE [df].[dim_SalesPerson] (
   [SalesPersonKey] int IDENTITY(1, 1),
-  [BusinessEntityID] INT,
+  [SalesPersonID] INT,
   [PersonType] VARCHAR(5),
   [ModifiedDate] DATETIME,
   [FirstName] VARCHAR(50),
@@ -230,11 +232,12 @@ GO
 
 --VIEW
 --using to select data from one or many stg tables with the needed column with right column name corresponding to the dim table
+
 create or alter function stg.f_fact_SaleProduct(@last_load_run datetime = '1753-01-01 00:00:00')
 RETURNS TABLE
 as
 RETURN
-	with sale as (
+	with sale0 as (
 		select 
 			sd.SalesOrderID,
 			sd.ProductID,
@@ -255,6 +258,9 @@ RETURN
 			as [ModifiedDate]
 		from stg.Sales_SalesOrderDetail sd 
 		inner join stg.Sales_SalesOrderHeader sh on sd.SalesOrderID=sh.SalesOrderID 
+	),
+	sale as(
+		select * from sale0 where [ModifiedDate]>@last_load_run
 	)
 	select
 		[ProductKey],
@@ -272,18 +278,31 @@ RETURN
 		[UnitPriceDiscount],
 		[LineTotal]
 	from sale
-	left join df.dim_Product d_pro on sale.ProductID=d_pro.ProductID and d_pro.is_current=1 and sale.[ModifiedDate]>@last_load_run
-	left join df.dim_SpeciaOffer d_offer on sale.SpecialOfferID=d_offer.SpecialOfferID and d_pro.is_current=1
-	left join df.dim_Customer d_cus on sale.CustomerID=d_cus.BusinessEntityID and d_cus.is_current=1
-	left join df.dim_SalesPerson d_saleper on sale.SalesPersonID=d_saleper.BusinessEntityID and d_saleper.is_current=1
-	left join df.dim_SalesTerritory dim_ter on sale.TerritoryID=dim_ter.TerritoryID and dim_ter.is_current=1
-	left join df.dim_ShipMethod dim_ship on sale.ShipMethodID=dim_ship.ShipMethodID and dim_ship.is_current=1
+	left join df.dim_Product d_pro on sale.ProductID=d_pro.ProductID
+		and sale.ModifiedDate>=d_pro.[start_date] and sale.ModifiedDate<d_pro.[end_date] 
+	left join df.dim_SpeciaOffer d_offer on sale.SpecialOfferID=d_offer.SpecialOfferID 
+		and sale.ModifiedDate>=d_offer.[start_date] and sale.ModifiedDate<d_offer.[end_date] 
+	left join df.dim_Customer d_cus on sale.CustomerID=d_cus.CustomerID 
+		and sale.ModifiedDate>=d_cus.[start_date] and sale.ModifiedDate<d_cus.[end_date] 
+	left join df.dim_SalesPerson d_saleper on sale.SalesPersonID=d_saleper.SalesPersonID
+		and sale.ModifiedDate>=d_saleper.[start_date] and sale.ModifiedDate<d_saleper.[end_date] 
+	left join df.dim_SalesTerritory dim_ter on sale.TerritoryID=dim_ter.TerritoryID
+		and sale.ModifiedDate>=dim_ter.[start_date] and sale.ModifiedDate<dim_ter.[end_date] 
+	left join df.dim_ShipMethod dim_ship on sale.ShipMethodID=dim_ship.ShipMethodID
+		and sale.ModifiedDate>=dim_ship.[start_date] and sale.ModifiedDate<dim_ship.[end_date] 
 GO
 
 create or alter function stg.f_fact_SaleHeader(@last_load_run datetime = '1753-01-01 00:00:00')
 RETURNS TABLE
 as
 RETURN
+	with sale_header
+	as(
+		select
+			*
+		from stg.Sales_SalesOrderHeader
+		where ModifiedDate>@last_load_run
+	)
 	select
 		[CustomerKey], 
 		[SalesPersonKey],
@@ -297,13 +316,18 @@ RETURN
 		[TaxAmt],
 		[Freight],
 		[TotalDue]
-	from stg.Sales_SalesOrderHeader sh 
-	left join df.dim_Customer d_cus on sh.CustomerID=d_cus.BusinessEntityID and d_cus.is_current=1 and sh.ModifiedDate>@last_load_run
-	left join df.dim_SalesPerson d_saleper on sh.SalesPersonID=d_saleper.BusinessEntityID and d_saleper.is_current=1
+	from sale_header sh 
+	left join df.dim_Customer d_cus on sh.CustomerID=d_cus.CustomerID 
+		and sh.ModifiedDate>=d_cus.[start_date] and sh.ModifiedDate<d_cus.[end_date] 
+	left join df.dim_SalesPerson d_saleper on sh.SalesPersonID=d_saleper.SalesPersonID and d_saleper.is_current=1
+		and sh.ModifiedDate>=d_saleper.[start_date] and sh.ModifiedDate<d_saleper.[end_date] 
 	left join df.dim_SalesTerritory dim_ter on sh.TerritoryID=dim_ter.TerritoryID and dim_ter.is_current=1
+		and sh.ModifiedDate>=dim_ter.[start_date] and sh.ModifiedDate<dim_ter.[end_date] 
 	left join df.dim_ShipMethod dim_ship on sh.ShipMethodID=dim_ship.ShipMethodID and dim_ship.is_current=1
+		and sh.ModifiedDate>=dim_ship.[start_date] and sh.ModifiedDate<dim_ship.[end_date] 
 
 GO
+
 
 create or alter function stg.f_fact_stock(@last_load_run datetime = '1753-01-01 00:00:00')
 RETURNS TABLE
@@ -313,6 +337,7 @@ RETURN
 	with order_status as(
 		select 
 			[SalesOrderID], 
+			[CustomerID],
 			[status], 
 			LAG([status]) OVER(partition by SalesOrderID ORDER BY ModifiedDate) as [pre_status],
 			[ModifiedDate]
@@ -320,25 +345,27 @@ RETURN
 		where is_current=1 and [ModifiedDate]>@last_load_run
 	),
 	order_status_updated_into_shipped as( --which order id have update status to shipped 
-		select [SalesOrderID], [ModifiedDate]
+		select [SalesOrderID], [CustomerID], [ModifiedDate]
 		from order_status
 		where [status]=5 and [status]<>COALESCE([pre_status], -1)
 	),
 	export as(
 	select
 		ProductID, 
+		[CustomerID],
 		SUM(OrderQty) as 'QuantityOut',
 		MAX(sta.ModifiedDate) as 'DateExport'
 	from stg.Sales_SalesOrderDetail ordetail 
 		inner join order_status_updated_into_shipped sta 
 		on ordetail.SalesOrderID=sta.SalesOrderID
-	group by ProductID
+	group by ProductID, [CustomerID]
 	),
 
 	--import
 	purchasing_status as(
 		select 
 			[PurchaseOrderID], 
+			[VendorID],
 			[status], 
 			LAG([status]) OVER(partition by PurchaseOrderID ORDER BY ModifiedDate) as [pre_status],
 			[ModifiedDate] 
@@ -346,30 +373,47 @@ RETURN
 		where is_current=1 and [ModifiedDate]>@last_load_run
 	),
 	purchasing_status_updated_into_completed as(
-		select [PurchaseOrderID], [ModifiedDate]
+		select [PurchaseOrderID], [VendorID], [ModifiedDate]
 		from purchasing_status
 		where [status]=4 and [status]<>COALESCE([pre_status], -1)
 	),
 	import as(
 	select 
 		ProductID, 
+		VendorID,
 		SUM(OrderQty) as 'QuantityIn',
 		MAX(sta.ModifiedDate) as 'DateImport'
 	from stg.Purchasing_PurchaseOrderDetail ordetail 
 		inner join purchasing_status_updated_into_completed sta 
 		on ordetail.PurchaseOrderID=sta.PurchaseOrderID
-	group by ProductID
-	)
+	group by ProductID, [VendorID]
+	),
+	stock as(
 	select
-		ProductKey,
-		dbo.YYYYMMDD_int_format((SELECT MAX([ModifiedDate])
-			FROM (VALUES (DateExport),(DateImport)) AS value([ModifiedDate])) )
-		as [DateKey],
+		COALESCE(import.ProductID, export.ProductID) as ProductID,
+		(SELECT MAX([ModifiedDate])
+			FROM (VALUES (DateExport),(DateImport)) AS value([ModifiedDate])) as [ModifiedDate],
+		CustomerID,
+		VendorID,
 		QuantityOut, 
 		QuantityIn
 	from export 
 	full outer join import on export.ProductID=import.ProductID
-	left join df.dim_Product d_pro on COALESCE(import.ProductID, export.ProductID)=d_pro.ProductID and d_pro.is_current=1
+	)
+	select 
+		ProductKey,
+		dbo.YYYYMMDD_int_format(stock.[ModifiedDate]) as [DateKey],
+		CustomerKey,
+		VendorKey,
+		QuantityOut, 
+		QuantityIn
+	from stock 
+	left join df.dim_Product d_pro on stock.ProductID=d_pro.ProductID
+		and stock.ModifiedDate>=d_pro.[start_date] and stock.ModifiedDate<d_pro.[end_date] 
+	left join df.dim_Customer d_cus on stock.CustomerID=d_cus.CustomerID
+		and stock.ModifiedDate>=d_cus.[start_date] and stock.ModifiedDate<d_cus.[end_date] 
+	left join df.dim_Vendor d_ven on stock.VendorID=d_ven.VendorID
+		and stock.ModifiedDate>=d_ven.[start_date] and stock.ModifiedDate<d_ven.[end_date] 
 GO
 
 
@@ -399,7 +443,7 @@ create or alter view stg.v_dim_Product
 		[SellEndDate], 
 		[DiscontinuedDate],
 		(SELECT MAX([ModifiedDate])
-		FROM (VALUES (p.[ModifiedDate]),(psc.[ModifiedDate]),(pc.[ModifiedDate])) AS [ModifiedDate]) 
+		FROM (VALUES (p.[ModifiedDate]),(psc.[ModifiedDate]),(pc.[ModifiedDate]), (pm.[ModifiedDate])) AS [ModifiedDate]) 
 		as [ModifiedDate]
 	from stg.Production_Product p 
 	left join stg.Production_ProductSubcategory psc on p.ProductSubcategoryID=psc.ProductSubcategoryID and psc.is_current=1
@@ -456,7 +500,7 @@ GO
 create or alter view stg.v_dim_Customer
 as
 	select
-	  [BusinessEntityID],
+	  [BusinessEntityID] as CustomerID,
 	  [PersonType],
 	  [FirstName],
 	  [MiddleName],
@@ -477,7 +521,7 @@ GO
 create or alter view stg.v_dim_SalesPerson
 as
 	select
-	  [BusinessEntityID],
+	  [BusinessEntityID] as SalesPersonID,
 	  [PersonType],
 	  [FirstName],
 	  [MiddleName],
