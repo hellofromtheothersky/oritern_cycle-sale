@@ -1,4 +1,5 @@
 from airflow.providers.microsoft.mssql.hooks.mssql import MsSqlHook
+from airflow.exceptions import AirflowException
 from airflow.models.dagrun import DagRun
 from airflow.models.dagbag import DagBag
 from airflow.decorators import  task
@@ -17,7 +18,6 @@ def replace_from_dict(s, replace_dict):
     return s
 
 def update_task_runtime(dag_id, load_cf_task_id, ti):
-    print(VOL_MAPPING)
     mapped_index={}
     i=0
     while i>=0:
@@ -34,6 +34,7 @@ def update_task_runtime(dag_id, load_cf_task_id, ti):
     dag = DagBag().get_dag(dag_id)
     last_dagrun_run_id = dag.get_last_dagrun(include_externally_triggered=True)
 
+    task_failed=0
     dag_runs = DagRun.find(dag_id=dag_id)
     for dag_run in dag_runs:
     # get the dag_run details for the Dag that triggered this
@@ -47,12 +48,14 @@ def update_task_runtime(dag_id, load_cf_task_id, ti):
                     print('IndexError')
                     pass
                 else:
-                    print(task.task_id, task.map_index, task.start_date, task.end_date, task.duration, task.state)
-                    print(mapped_index)
                     if task_id in mapped_index.keys():
                         task_id_in_cf_table=mapped_index[task_id][str(task.map_index)]
                         # get the TASK-level dag_run metadata!
                         hook.run("EXEC set_task_config {0}, '{1}', '{2}', {3}, '{4}', '{5}'".format(task_id_in_cf_table, task.start_date, task.end_date, task.duration, task.state, task.execution_date))
+                        if task.state == 'failed':
+                            task_failed=1
+    if task_failed:
+        raise AirflowException("UPSTEAM TASK FAIL")
 
 
 @task

@@ -215,6 +215,7 @@ begin
 	INSERT INTO #temp_table(target_table) VALUES ('dim_ShipMethod')
 	INSERT INTO #temp_table(target_table) VALUES ('dim_Customer')
 	INSERT INTO #temp_table(target_table) VALUES ('dim_SalesPerson')
+	INSERT INTO #temp_table(target_table) VALUES ('dim_Location')
 
 
 	update #temp_table
@@ -264,18 +265,17 @@ begin
 	
 	INSERT INTO #temp_table(target_table) VALUES ('fact_SaleProduct')
 	INSERT INTO #temp_table(target_table) VALUES ('fact_SaleHeader')
-	INSERT INTO #temp_table(target_table) VALUES ('fact_SaleStatus')
-	INSERT INTO #temp_table(target_table) VALUES ('fact_Inventory')
+	INSERT INTO #temp_table(target_table) VALUES ('fact_Stock')
 
 
 	update #temp_table
 	set task_name='load_fact',
 		source_database='warehouse_db',
 		source_schema='stg',
-		source_table='v_'+target_table,
+		source_table='f_'+target_table,
 		target_database='warehouse_db',
 		target_schema='DF',
-		time_col_name='date_key'
+		time_col_name='ModifiedDate'
 
 
 	insert into stg.config_table (task_name, 

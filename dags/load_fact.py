@@ -42,10 +42,10 @@ def format_yyyymmdd(datetime):
 
 with DAG( 
     default_args=default_args,
-    dag_id='load_fact',
+    dag_id='oritern_ELT_load_fact',
     description='load_fact',
     start_date = datetime.now()- timedelta(days=2),
-    schedule_interval='0 22 * * *',
+    schedule=None,
     catchup=False,
     user_defined_macros={
         "format_yyyymmdd": format_yyyymmdd,  # Macro can be a variable/function
@@ -67,7 +67,7 @@ with DAG(
     update_task_runtime = PythonOperator(
         task_id='update_task_runtime',
         python_callable=update_task_runtime,
-        op_kwargs={'dag_id': 'load_fact','load_cf_task_id': 'load_fact_gr.load_enable_task_config'},
+        op_kwargs={'dag_id': 'oritern_ELT_load_fact','load_cf_task_id': 'load_fact_gr.load_enable_task_config'},
         trigger_rule=TriggerRule.ALL_DONE,
     )
 

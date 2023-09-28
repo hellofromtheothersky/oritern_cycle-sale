@@ -3,7 +3,7 @@ CREATE TABLE [df].[fact_SaleProduct] (
   [SpeicalOfferKey] int,
   [CustomerKey] int,
   [SalesPersonKey] int,
-  [date_key] int,
+  [DateKey] int,
   [OrderDateKey] int,
   [ShipDateKey] int,
   [DueDateKey] int,
@@ -19,7 +19,7 @@ GO
 CREATE TABLE [df].[fact_SaleHeader] (
   [CustomerKey] int,
   [SalesPersonKey] int,
-  [date_key] int,
+  [DateKey] int,
   [OrderDateKey] int,
   [ShipDateKey] int,
   [DueDateKey] int,
@@ -32,8 +32,30 @@ CREATE TABLE [df].[fact_SaleHeader] (
 )
 GO
 
+CREATE TABLE [df].[fact_purchasing] (
+  [ProductKey] int,
+  [VendorKey] int,
+  [PurchaseOrderedDateKey] int,
+  [PurchaseReceivedDateKey] int,
+  [PurchaseRejectedDateKey] int,
+  [PurchaseStockedDateKey] int,
+  [PurchaseOrderedQty] int,
+  [PurchaseReceivedQty] int,
+  [PurchaseRejectedQty] int,
+  [PurchaseStockedQty] int
+)
+GO
+
+CREATE TABLE [df].[fact_stock] (
+  [ProductKey] int,
+  [DateKey] Int,
+  [QuantityIn] int,
+  [QuantityOut] int,
+)
+GO
+
 CREATE TABLE [df].[dim_Date] (
-  [date_key] int,
+  [DateKey] int,
   [TheDate] date,
   [TheDay] smallint,
   [TheDaySuffix] char(2),
@@ -61,6 +83,33 @@ CREATE TABLE [df].[dim_Date] (
   [TheFirstOfYear] date,
   [TheLastOfYear] date,
   [IsLeapYear] bit
+)
+GO
+
+CREATE TABLE [df].[dim_Location] (
+  [LocationKey] int IDENTITY(1, 1),
+  [LocationID] smallint,
+  [Name] nvarchar(50),
+  [CostRate] smallmoney,
+  [Availability] decimal(8,2),
+  [start_date] datetime,
+  [end_date] datetime,
+  [is_current] bit
+)
+GO
+
+CREATE TABLE [df].[dim_Vendor] (
+  [VendorKey] int IDENTITY(1, 1),
+  [VendorID] int,
+  [AccountNumber] nvarchar(15),
+  [Name] nvarchar(50),
+  [CreditRating] tinyint,
+  [PreferredVendorStatus] bit,
+  [ActiveFlag] bit,
+  [PurchasingWebServiceURL] nvarchar(1024),
+  [start_date] datetime,
+  [end_date] datetime,
+  [is_current] bit
 )
 GO
 
@@ -181,8 +230,10 @@ GO
 
 --VIEW
 --using to select data from one or many stg tables with the needed column with right column name corresponding to the dim table
-create or alter view stg.v_fact_SaleProduct
+create or alter function stg.f_fact_SaleProduct(@last_load_run datetime = '1753-01-01 00:00:00')
+RETURNS TABLE
 as
+RETURN
 	with sale as (
 		select 
 			sd.SalesOrderID,
@@ -210,7 +261,7 @@ as
 		[SpecialOfferKey],
 		[CustomerKey],
 		[SalesPersonKey],
-		dbo.YYYYMMDD_int_format(sale.ModifiedDate) as [date_key],
+		dbo.YYYYMMDD_int_format(sale.ModifiedDate) as [DateKey],
 		dbo.YYYYMMDD_int_format(sale.OrderDate) as [OrderDateKey],
 		dbo.YYYYMMDD_int_format(sale.ShipDate) as [ShipDateKey],
 		dbo.YYYYMMDD_int_format(sale.DueDate) as [DueDateKey],
@@ -221,7 +272,7 @@ as
 		[UnitPriceDiscount],
 		[LineTotal]
 	from sale
-	left join df.dim_Product d_pro on sale.ProductID=d_pro.ProductID and d_pro.is_current=1
+	left join df.dim_Product d_pro on sale.ProductID=d_pro.ProductID and d_pro.is_current=1 and sale.[ModifiedDate]>@last_load_run
 	left join df.dim_SpeciaOffer d_offer on sale.SpecialOfferID=d_offer.SpecialOfferID and d_pro.is_current=1
 	left join df.dim_Customer d_cus on sale.CustomerID=d_cus.BusinessEntityID and d_cus.is_current=1
 	left join df.dim_SalesPerson d_saleper on sale.SalesPersonID=d_saleper.BusinessEntityID and d_saleper.is_current=1
@@ -229,13 +280,14 @@ as
 	left join df.dim_ShipMethod dim_ship on sale.ShipMethodID=dim_ship.ShipMethodID and dim_ship.is_current=1
 GO
 
-
-create or alter view stg.v_fact_SaleHeader
+create or alter function stg.f_fact_SaleHeader(@last_load_run datetime = '1753-01-01 00:00:00')
+RETURNS TABLE
 as
+RETURN
 	select
-		[CustomerKey],
+		[CustomerKey], 
 		[SalesPersonKey],
-		dbo.YYYYMMDD_int_format(sh.ModifiedDate) as [date_key],
+		dbo.YYYYMMDD_int_format(sh.ModifiedDate) as [DateKey],
 		dbo.YYYYMMDD_int_format(sh.OrderDate) as [OrderDateKey],
 		dbo.YYYYMMDD_int_format(sh.ShipDate) as [ShipDateKey],
 		dbo.YYYYMMDD_int_format(sh.DueDate) as [DueDateKey],
@@ -246,10 +298,78 @@ as
 		[Freight],
 		[TotalDue]
 	from stg.Sales_SalesOrderHeader sh 
-	left join df.dim_Customer d_cus on sh.CustomerID=d_cus.BusinessEntityID and d_cus.is_current=1
+	left join df.dim_Customer d_cus on sh.CustomerID=d_cus.BusinessEntityID and d_cus.is_current=1 and sh.ModifiedDate>@last_load_run
 	left join df.dim_SalesPerson d_saleper on sh.SalesPersonID=d_saleper.BusinessEntityID and d_saleper.is_current=1
 	left join df.dim_SalesTerritory dim_ter on sh.TerritoryID=dim_ter.TerritoryID and dim_ter.is_current=1
 	left join df.dim_ShipMethod dim_ship on sh.ShipMethodID=dim_ship.ShipMethodID and dim_ship.is_current=1
+
+GO
+
+create or alter function stg.f_fact_stock(@last_load_run datetime = '1753-01-01 00:00:00')
+RETURNS TABLE
+as
+RETURN
+	--export
+	with order_status as(
+		select 
+			[SalesOrderID], 
+			[status], 
+			LAG([status]) OVER(partition by SalesOrderID ORDER BY ModifiedDate) as [pre_status],
+			[ModifiedDate]
+		from stg.Sales_SalesOrderHeader
+		where is_current=1 and [ModifiedDate]>@last_load_run
+	),
+	order_status_updated_into_shipped as( --which order id have update status to shipped 
+		select [SalesOrderID], [ModifiedDate]
+		from order_status
+		where [status]=5 and [status]<>COALESCE([pre_status], -1)
+	),
+	export as(
+	select
+		ProductID, 
+		SUM(OrderQty) as 'QuantityOut',
+		MAX(sta.ModifiedDate) as 'DateExport'
+	from stg.Sales_SalesOrderDetail ordetail 
+		inner join order_status_updated_into_shipped sta 
+		on ordetail.SalesOrderID=sta.SalesOrderID
+	group by ProductID
+	),
+
+	--import
+	purchasing_status as(
+		select 
+			[PurchaseOrderID], 
+			[status], 
+			LAG([status]) OVER(partition by PurchaseOrderID ORDER BY ModifiedDate) as [pre_status],
+			[ModifiedDate] 
+		from stg.Purchasing_PurchaseOrderHeader
+		where is_current=1 and [ModifiedDate]>@last_load_run
+	),
+	purchasing_status_updated_into_completed as(
+		select [PurchaseOrderID], [ModifiedDate]
+		from purchasing_status
+		where [status]=4 and [status]<>COALESCE([pre_status], -1)
+	),
+	import as(
+	select 
+		ProductID, 
+		SUM(OrderQty) as 'QuantityIn',
+		MAX(sta.ModifiedDate) as 'DateImport'
+	from stg.Purchasing_PurchaseOrderDetail ordetail 
+		inner join purchasing_status_updated_into_completed sta 
+		on ordetail.PurchaseOrderID=sta.PurchaseOrderID
+	group by ProductID
+	)
+	select
+		ProductKey,
+		dbo.YYYYMMDD_int_format((SELECT MAX([ModifiedDate])
+			FROM (VALUES (DateExport),(DateImport)) AS value([ModifiedDate])) )
+		as [DateKey],
+		QuantityOut, 
+		QuantityIn
+	from export 
+	full outer join import on export.ProductID=import.ProductID
+	left join df.dim_Product d_pro on COALESCE(import.ProductID, export.ProductID)=d_pro.ProductID and d_pro.is_current=1
 GO
 
 
@@ -282,10 +402,10 @@ create or alter view stg.v_dim_Product
 		FROM (VALUES (p.[ModifiedDate]),(psc.[ModifiedDate]),(pc.[ModifiedDate])) AS [ModifiedDate]) 
 		as [ModifiedDate]
 	from stg.Production_Product p 
-	inner join stg.Production_ProductSubcategory psc on p.ProductSubcategoryID=psc.ProductSubcategoryID
-	inner join stg.Production_ProductCategory pc on psc.ProductCategoryID=pc.ProductCategoryID
-	inner join stg.Production_ProductModel pm on p.ProductModelID=pm.ProductModelID
-	where p.is_current=1 and psc.is_current=1 and pc.is_current=1
+	left join stg.Production_ProductSubcategory psc on p.ProductSubcategoryID=psc.ProductSubcategoryID and psc.is_current=1
+	left join stg.Production_ProductCategory pc on psc.ProductCategoryID=pc.ProductCategoryID and pc.is_current=1
+	left join stg.Production_ProductModel pm on p.ProductModelID=pm.ProductModelID and pc.is_current=1
+	where p.is_current=1
 GO
 
 
@@ -371,6 +491,19 @@ as
 	  [StateProvinceName],
 	  [ModifiedDate]
   	from [stg].[Person-SalesPerson]
+	where is_current=1
+GO
+
+
+create or alter view stg.v_dim_Location
+as
+	select
+	  [LocationID],
+	  [Name],
+	  [CostRate],
+	  [Availability],
+	  [ModifiedDate]
+  	from [stg].[Production_Location]
 	where is_current=1
 GO
 

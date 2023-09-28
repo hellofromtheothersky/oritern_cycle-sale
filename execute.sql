@@ -19,9 +19,12 @@ EXEC create_config_for_load_dim
 --set load fact
 EXEC create_config_for_load_fact
 --set enable task
-update stg.config_table set enable=1 where task_name='landing_test_db_db' or source_location LIKE 'C:\temp\cycle-sale\testdb\%'
-update stg.config_table set enable=1 where task_id=123 or task_id=124
-update stg.config_table set enable=1 where task_name='load_dim'
+update stg.config_table set enable=1 where source_table NOT IN ('Production_ProductDocument',
+												'Production_ProductPhoto',
+												'dbo_sysdiagrams',
+												'Production_Document',
+												'HumanResources_Employee',
+												'TransactionHistory')
 select * from stg.config_table where enable=1
 
 
@@ -32,3 +35,21 @@ exec load_to_dim_Date '20000101'
 
 --==TEST
 EXEC load_to_dim_scd2 134
+
+select * from stg.config_table where task_id=140
+update stg.config_table set target_schema='DF' where task_id=140
+
+EXEC load_to_stage_table 84
+select * from stg.config_table where task_id=84
+select source_table from stg.config_table where status='failed'
+
+
+select *
+from stg.config_table
+where source_table IN ('Production_ProductDocument',
+												'Production_ProductPhoto',
+												'dbo_sysdiagrams',
+												'Production_Document',
+												'HumanResources_Employee',
+												'TransactionHistory')
+											exec load_to_stage_table 125

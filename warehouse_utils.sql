@@ -485,10 +485,11 @@ begin
 	DECLARE @fct VARCHAR(100) = CONCAT(@fct_schma, '.', @fct_table) 
 
 	DECLARE @sql NVARCHAR(200)
-	set @sql=CONCAT('INSERT INTO ', @fct,'
-			select * from ', @src)
-	if @last_load_run is not null
-	set @sql=@sql+CONCAT(' where ', @src_time, ' > ', @last_load_run)
+	set @sql=CONCAT('INSERT INTO ', @fct,' select * from ', @src, '(')
+	if @last_load_run is null
+		set @sql=@sql+'default)'
+	else
+		set @sql=@sql+QUOTENAME(@last_load_run, '''')+')'
 	print @sql
 	EXEC(@sql)
 end
