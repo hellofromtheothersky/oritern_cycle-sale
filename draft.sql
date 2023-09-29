@@ -20,7 +20,6 @@ DROP TABLE [df].[fact_SaleHeader]
 DROP TABLE [df].[fact_SaleProduct]
 DROP TABLE [df].[dim_Location]
 DROP TABLE [df].[dim_Vendor]
-DROP TABLE [df].[fact_inventory]
 DROP TABLE [df].[fact_purchasing]
 DROP TABLE [df].[fact_stock]
 
@@ -98,4 +97,35 @@ SELECT 'TRUNCATE TABLE ' + '[' + TABLE_SCHEMA + '].[' + TABLE_NAME + ']'
 FROM INFORMATION_SCHEMA.TABLES
 ORDER BY TABLE_SCHEMA, TABLE_NAME
 
-EXEc load_
+EXEC load_to_dim_scd2 135
+
+
+
+EXEC load_to_dim_scd2 140
+
+
+
+CREATE TABLE #TempImport (
+    ProductName VARCHAR(100),
+    TransactionID int,
+    ProductID varchar(100),
+    ReferenceOrderID varchar(100),
+    ReferenceOrderLineID varchar(100),
+    TransactionDate varchar(100),
+    TransactionType varchar(100),
+    Quantity varchar(100),
+    ActualCost varchar(100),
+    ModifiedDate varchar(100)
+);
+
+-- Bulk insert the data from the file into the staging table
+BULK INSERT #TempImport
+FROM 'C:\temp\cycle-sale\csv\TransactionHistory.csv'  -- Replace with the actual path to your file
+WITH (
+    FIELDTERMINATOR = '\t',  -- Specify the tab character as the field delimiter
+    ROWTERMINATOR = '\n'     -- Specify the line feed character as the row delimiter
+);
+
+truncate table #TempImport
+select * from #TempImport order by TransactionID
+select * from stg.config_table where target_table='dim_Product'

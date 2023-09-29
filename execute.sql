@@ -34,22 +34,3 @@ exec load_to_dim_Date '20000101'
 
 
 --==TEST
-EXEC load_to_dim_scd2 134
-
-select * from stg.config_table where task_id=140
-update stg.config_table set target_schema='DF' where task_id=140
-
-EXEC load_to_stage_table 84
-select * from stg.config_table where task_id=84
-select source_table from stg.config_table where status='failed'
-
-
-select *
-from stg.config_table
-where source_table IN ('Production_ProductDocument',
-												'Production_ProductPhoto',
-												'dbo_sysdiagrams',
-												'Production_Document',
-												'HumanResources_Employee',
-												'TransactionHistory')
-											exec load_to_stage_table 125

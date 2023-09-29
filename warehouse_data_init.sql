@@ -216,7 +216,7 @@ begin
 	INSERT INTO #temp_table(target_table) VALUES ('dim_Customer')
 	INSERT INTO #temp_table(target_table) VALUES ('dim_SalesPerson')
 	INSERT INTO #temp_table(target_table) VALUES ('dim_Location')
-
+	INSERT INTO #temp_table(target_table) VALUES ('dim_Vendor')
 
 	update #temp_table
 	set task_name='load_dim',
@@ -272,7 +272,7 @@ begin
 	set task_name='load_fact',
 		source_database='warehouse_db',
 		source_schema='stg',
-		source_table='f_'+target_table,
+		source_table='p_'+target_table,
 		target_database='warehouse_db',
 		target_schema='DF',
 		time_col_name='ModifiedDate'
