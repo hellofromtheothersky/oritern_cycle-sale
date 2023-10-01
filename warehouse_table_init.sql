@@ -1,6 +1,7 @@
 ﻿--create schema stg
 --create schema df --dimfact
-
+--Create database warehouse_db
+Use warehouse_db
 drop table if exists stg.config_table
 CREATE TABLE stg.config_table (
     task_id INT IDENTITY(1,1) PRIMARY KEY,

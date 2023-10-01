@@ -34,7 +34,7 @@ class LoadStgToFact(BaseOperator):
 default_args = {
     'owner': 'hieu_nguyen',
     'retries': 0,
-    'retry_delay': timedelta(minutes=1)
+    'retry_delay': timedelta(minutes=0.5)
 }
 def format_yyyymmdd(datetime):
     return datetime.strftime("%Y%m%d")

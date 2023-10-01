@@ -1,7 +1,7 @@
 ﻿use warehouse_db
 
 go
-create or alter function get_col_seq
+CREATE OR ALTER FUNCTION get_col_seq
 (
 	@schema_name varchar(100),
 	@table_name varchar(100),
@@ -20,7 +20,8 @@ begin
 end
 Go
 
-create or alter function get_first_col
+
+CREATE OR ALTER FUNCTION get_first_col
 (	
 	@schema_name varchar(100),
 	@table_name varchar(100)
@@ -38,7 +39,7 @@ end
 Go
 
 
-create or alter function get_col_seq_and_xml_convert
+CREATE OR ALTER FUNCTION get_col_seq_and_xml_convert
 (	
 	@schema_name varchar(100),
 	@table_name varchar(100)
@@ -57,7 +58,7 @@ end
 Go
 
 
-create or alter function YYYYMMDD_int_format
+CREATE OR ALTER FUNCTION YYYYMMDD_int_format
 (	
 	@datetime datetime
 )
@@ -81,6 +82,7 @@ BEGIN
 END
 GO
 
+
 CREATE OR ALTER PROC set_task_config
 (
     @task_id VARCHAR(100),
@@ -97,6 +99,7 @@ BEGIN
 	where task_id=@task_id
 END
 GO
+
 
 --make the query to select data incrementally or full loading from a source table in config table
 CREATE OR ALTER PROC get_qr_for_select_data_of_task
@@ -130,6 +133,7 @@ BEGIN
 END
 GO
 
+
 -- helper proc to load a file to database, and then load it to the staging table
 CREATE OR ALTER PROC load_table_to_external_table
 (
@@ -149,9 +153,26 @@ begin
 		ROWTERMINATOR = ''0x0A''
 		)')
 	print @sql
-	EXEC(@sql)
+
+	BEGIN TRY
+		EXEC(@sql)
+	END TRY
+	BEGIN CATCH
+		set @sql=CONCAT('
+		bulk INSERT ', @external_table_name,'
+		FROM ''', @filepath, '''
+		WITH 
+		(FORMAT = ''CSV'',
+		FIRSTROW = 2, 
+		FIELDTERMINATOR = ''\t'',
+		ROWTERMINATOR = ''0x0A''
+		)')
+		print @sql
+		EXEC(@sql)
+	END CATCH
 end
 Go
+
 
 CREATE OR ALTER PROC load_json_to_external_table
 (
@@ -162,7 +183,6 @@ CREATE OR ALTER PROC load_json_to_external_table
 as
 begin
 	declare @sql NVARCHAR(MAX)
-
 	DECLARE @format_json varchar(MAX)
 	if @json_file_opt='Person-GeneralContact' 
 		set @format_json='BusinessEntityID INT ''$.BusinessEntityID'',
@@ -172,7 +192,6 @@ begin
 							MiddleName VARCHAR(50) ''$.PersonInfo[0].MiddleName'',
 							LastName VARCHAR(50) ''$.PersonInfo[0].LastName'',
 							PersonAddressDetail VARCHAR(50) ''$.PersonInfo[0].PersonContact[0].PersonAddress[0].PersonAddressDetail'''
-
 	if @json_file_opt='Person-IndividualCustomer'
 		set @format_json='  BusinessEntityID INT ''$.BusinessEntityID'',
 							PersonType VARCHAR(2) ''$.PersonType'',
@@ -249,7 +268,6 @@ CREATE OR ALTER PROC load_to_stage_table
 )
 AS
 BEGIN
-	SET XACT_ABORT ON
 	-- init variables
 	DECLARE @file_path nvarchar(100), 
 			@file_type varchar(10),
@@ -280,7 +298,6 @@ BEGIN
 	where task_id=@task_id
 
 	-- init external table
-	BEGIN TRAN
 
 	SET @sql=CONCAT('
 	drop table if exists ', @external_table,'
@@ -310,12 +327,14 @@ BEGIN
 		update ', @external_table,' set checksum=HASHBYTES(''MD5'', concat_ws(''~'', ', @col_list,')) 
 		print ''hash value created''
 		
+		DROP TABLE IF EXISTS temp_compare_hash
 		select l.checksum as landing_checksum, 
 			   l.', @key_col_name,' as nal_key,
 			   s.checksum as stage_checksum
 		into temp_compare_hash
 		from ', @external_table,' l INNER JOIN ', @stage_table, ' s on l.', @key_col_name,' = s.', @key_col_name,'
 		where s.is_current=1
+		print ''temp_compare_hash created''
 
 		--source dont have key that stage have -> source delete
 			update ', @stage_table, '
@@ -353,11 +372,11 @@ BEGIN
 		EXEC(@sql)
 	END
 	print @sql
-	COMMIT TRAN
 END
 GO
 
-create or alter proc load_to_dim_scd2
+
+CREATE OR ALTER PROC load_to_dim_scd2
 (
 	@task_id int
 )
@@ -469,7 +488,7 @@ end
 go
 
 
-create or alter proc load_to_fact
+CREATE OR ALTER PROC load_to_fact
 (
 	@task_id int
 )
@@ -502,6 +521,7 @@ begin
 	print @sql
 	EXEC(@sql)
 end
+go
 
 
 create proc load_to_dim_Date 
@@ -585,3 +605,4 @@ begin
 	  ORDER BY TheDate
 	  OPTION (MAXRECURSION 0);
 end
+go

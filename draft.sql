@@ -103,11 +103,11 @@ EXEC load_to_dim_scd2 135
 
 EXEC load_to_dim_scd2 140
 
-
-
+select * from #TempImport
+drop TABLE #TempImport
 CREATE TABLE #TempImport (
     ProductName VARCHAR(100),
-    TransactionID int,
+    TransactionID VARCHAR(100),
     ProductID varchar(100),
     ReferenceOrderID varchar(100),
     ReferenceOrderLineID varchar(100),
@@ -115,13 +115,14 @@ CREATE TABLE #TempImport (
     TransactionType varchar(100),
     Quantity varchar(100),
     ActualCost varchar(100),
-    ModifiedDate varchar(100)
+    ModifiedDate datetime
 );
 
 -- Bulk insert the data from the file into the staging table
-BULK INSERT #TempImport
+BULK INSERT select * from stg.[temp_TransactionHistory]
 FROM 'C:\temp\cycle-sale\csv\TransactionHistory.csv'  -- Replace with the actual path to your file
 WITH (
+	FIRSTROW = 2,
     FIELDTERMINATOR = '\t',  -- Specify the tab character as the field delimiter
     ROWTERMINATOR = '\n'     -- Specify the line feed character as the row delimiter
 );
@@ -129,3 +130,10 @@ WITH (
 truncate table #TempImport
 select * from #TempImport order by TransactionID
 select * from stg.config_table where target_table='dim_Product'
+
+
+drop table if exists stg.[temp_TransactionHistory]
+	select TOP 0 * into stg.[temp_TransactionHistory] from stg.[TransactionHistory]
+	alter table stg.[temp_TransactionHistory] drop column checksum
+	alter table stg.[temp_TransactionHistory] drop column is_deleted
+	alter table stg.[temp_TransactionHistory] drop column is_current

@@ -1,3 +1,6 @@
+use warehouse_db
+Go 
+
 CREATE TABLE [df].[fact_SaleProduct] (
   [ProductKey] int,
   [SpeicalOfferKey] int,

@@ -42,18 +42,25 @@ def update_task_runtime(dag_id, load_cf_task_id, ti):
             # get the DAG-level dag_run metadata!
             dag_run_tasks = dag_run.get_task_instances()
             for task in dag_run_tasks:
+                if task.state == 'failed':
+                    task_failed=1
+                    print('TASK FAIL: ', task)
                 try:
                     task_id=task.task_id.split('.')[1]
                 except IndexError:
-                    print('IndexError')
                     pass
                 else:
                     if task_id in mapped_index.keys():
                         task_id_in_cf_table=mapped_index[task_id][str(task.map_index)]
                         # get the TASK-level dag_run metadata!
-                        hook.run("EXEC set_task_config {0}, '{1}', '{2}', {3}, '{4}', '{5}'".format(task_id_in_cf_table, task.start_date, task.end_date, task.duration, task.state, task.execution_date))
-                        if task.state == 'failed':
-                            task_failed=1
+                        hook.run("EXEC set_task_config {0}, '{1}', '{2}', {3}, '{4}', '{5}'"
+                                 .format(
+                                     task_id_in_cf_table, 
+                                     task.start_date, 
+                                     task.end_date, 
+                                     task.duration, 
+                                     task.state, 
+                                     task.execution_date))
     if task_failed:
         raise AirflowException("UPSTEAM TASK FAIL")
 

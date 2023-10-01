@@ -7,8 +7,8 @@ from datetime import datetime, timedelta
 
 default_args = {
     'owner': 'hieu_nguyen',
-    'retries': 5,
-    'retry_delay': timedelta(minutes=1)
+    'retries': 0,
+    'retry_delay': timedelta(minutes=0.5)
 }
 
 
